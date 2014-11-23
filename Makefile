@@ -37,7 +37,4 @@ IDIRS	+=	-I lib/util
 CFLAGS	+=	-g
 CFLAGS	+=	${IDIRS}
 
-test:	bsdec2-image-upload
-	sh -c './bsdec2-image-upload --public disk.img Foo Bar us-west-2 kivaloo-test ~/.s3/aws.key'
-
 .include <bsd.prog.mk>
