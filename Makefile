@@ -2,6 +2,7 @@ PROG=	bsdec2-image-upload
 SRCS=	main.c
 NO_MAN	?=	yes
 WARNS	?=	3
+BINDIR	?=	/usr/local/bin
 LDADD	+=	-lcrypto -lssl
 
 # Fundamental algorithms
