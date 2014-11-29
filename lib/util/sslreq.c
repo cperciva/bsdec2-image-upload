@@ -78,7 +78,7 @@ sslreq(const char * host, const char * port, const char * certfile,
 		return "Could not obtain SSL method";
 
 	/* Create an SSL context. */
-	if ((ctx = SSL_CTX_new(meth)) == NULL)
+	if ((ctx = SSL_CTX_new((void *)(uintptr_t)(const void *)meth)) == NULL)
 		return "Could not create SSL context";
 
 	/* Disable SSLv2 and SSLv3. */
