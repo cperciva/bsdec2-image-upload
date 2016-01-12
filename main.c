@@ -1026,7 +1026,7 @@ err0:
 
 static char *
 registerimage(const char * region, const char * snapshot, const char * name,
-    const char * desc, const char * key_id, const char * key_secret)
+    const char * desc, int sriov, const char * key_id, const char * key_secret)
 {
 	char * nameenc;
 	char * descenc;
@@ -1048,6 +1048,7 @@ registerimage(const char * region, const char * snapshot, const char * name,
 	    "Architecture=x86_64&"
 	    "RootDeviceName=%%2Fdev%%2Fsda1&"
 	    "VirtualizationType=hvm&"
+	    "%s"
 	    "BlockDeviceMapping.0.DeviceName=%%2Fdev%%2Fsda1&"
 	    "BlockDeviceMapping.0.Ebs.SnapshotId=%s&"
 	    "BlockDeviceMapping.0.Ebs.VolumeType=gp2&"
@@ -1061,7 +1062,8 @@ registerimage(const char * region, const char * snapshot, const char * name,
 	    "BlockDeviceMapping.4.DeviceName=%%2Fdev%%2Fsde&"
 	    "BlockDeviceMapping.4.VirtualName=ephemeral3&"
 	    "Version=2014-09-01",
-	    nameenc, descenc, snapshot) == -1)
+	    nameenc, descenc, sriov ? "SriovNetSupport=simple&" : "",
+	    snapshot) == -1)
 		goto err2;
 
 	/*
@@ -1288,7 +1290,8 @@ err0:
 int
 main(int argc, char * argv[])
 {
-	int public;
+	int public = 0;
+	int sriov = 0;
 	const char * diskimg;
 	const char * name;
 	const char * desc;
@@ -1308,13 +1311,16 @@ main(int argc, char * argv[])
 
 	WARNP_INIT;
 
-	/* Look for a --public flag. */
-	if ((argc > 1) && (strcmp(argv[1], "--public") == 0)) {
-		public = 1;
+	/* Look for --public and/or --sriov flags. */
+	while (argc > 1) {
+		if (strcmp(argv[1], "--public") == 0)
+			public = 1;
+		else if (strcmp(argv[1], "--sriov") == 0)
+			sriov = 1;
+		else
+			break;
 		argc--;
 		argv++;
-	} else {
-		public = 0;
 	}
 
 	/* Sanity-check. */
@@ -1378,7 +1384,7 @@ main(int argc, char * argv[])
 	}
 
 	/* Register an image. */
-	if ((ami = registerimage(region, snapshot, name, desc,
+	if ((ami = registerimage(region, snapshot, name, desc, sriov,
 	    key_id, key_secret)) == NULL) {
 		warnp("Failure registering AMI");
 		exit(1);
