@@ -332,7 +332,7 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 		"<file-format>RAW</file-format>"
 		"<importer>"
 		    "<name>bsdec2-image-upload</name>"
-		    "<version>1.0.1</version>"
+		    "<version>1.0.2</version>"
 		    "<release>2014-11-29</release>"
 		"</importer>"
 		"<self-destruct-url>https://%s.s3.amazonaws.com%s?%s</self-destruct-url>"
