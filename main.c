@@ -20,22 +20,11 @@
 #define CERTFILE "/usr/local/share/certs/ca-root-nss.crt"
 #define PARTSZ (10 * 1024 * 1024)
 
-static char * regions[] = {
-	"us-east-1",
-	"us-west-1",
-	"us-west-2",
-	"sa-east-1",
-	"eu-west-1",
-	"eu-central-1",
-	"ap-northeast-1",
-	"ap-northeast-2",
-	"ap-southeast-1",
-	"ap-southeast-2",
-};
-#define NREGIONS (sizeof(regions) / sizeof(regions[0]))
-
 /* Elastic string type. */
 ELASTICARRAY_DECL(STR, str, char);
+
+/* Elastic array of strings. */
+ELASTICARRAY_DECL(STRARRAY, strarray, char *);
 
 static char *
 encodeamp(char * s)
@@ -332,7 +321,7 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 		"<file-format>RAW</file-format>"
 		"<importer>"
 		    "<name>bsdec2-image-upload</name>"
-		    "<version>1.0.2</version>"
+		    "<version>1.1.0</version>"
 		    "<release>2014-11-29</release>"
 		"</importer>"
 		"<self-destruct-url>https://%s.s3.amazonaws.com%s?%s</self-destruct-url>"
@@ -623,61 +612,172 @@ err0:
 	return (NULL);
 }
 
-static char *
-xmlextract(const char * _s, const char * tagname)
+static int
+xmlextracts(const char * _s, const char * tagname,
+    char *** vals, size_t * nvals)
 {
 	char * s;
+	char * sorig;
 	char * tag;
+	char * stag;
+	STRARRAY vallist;
 	char * pst;
 	char * pend;
 	char * contents;
+	size_t i;
 
 	/* Duplicate the string so we can safely mangle it. */
-	if ((s = strdup(_s)) == NULL)
+	if ((sorig = s = strdup(_s)) == NULL)
 		goto err0;
 
-	/* Construct "<tagname>". */
+	/* Construct "<tagname>" and "</tagname>". */
 	if (asprintf(&tag, "<%s>", tagname) == -1)
 		goto err1;
-
-	/* Search for "<tagname>". */
-	if ((pst = strstr(s, tag)) == NULL)
-		goto err2;
-	pst += strlen(tag);
-
-	/* Free "<tagname>". */
-	free(tag);
-
-	/* Construct "</tagname>". */
-	if (asprintf(&tag, "</%s>", tagname) == -1)
-		goto err1;
-
-	/* Look for </tagname>. */
-	if ((pend = strstr(pst, tag)) == NULL)
+	if (asprintf(&stag, "</%s>", tagname) == -1)
 		goto err2;
 
-	/* Free "</tagname>". */
+	/* Allocate array of tag contents. */
+	if ((vallist = strarray_init(0)) == NULL)
+		goto err3;
+
+	/* Find tags. */
+	while ((pst = strstr(s, tag)) != NULL) {
+		pst += strlen(tag);
+
+		/* Look for </tagname>. */
+		if ((pend = strstr(pst, stag)) == NULL) {
+			errno = 0;
+			goto err4;
+		}
+
+		/* Advance the remaining string pointer. */
+		s = pend + strlen(stag);
+
+		/* Duplicate tag contents. */
+		pend[0] = '\0';
+		if ((contents = strdup(pst)) == NULL)
+			goto err4;
+
+		/* Add to elastic array. */
+		if (strarray_append(vallist, &contents, 1))
+			goto err5;
+	}
+
+	/* Export the array of tag contents strings. */
+	if (strarray_export(vallist, vals, nvals))
+		goto err4;
+
+	/* Free strings constructed and duplicated. */
+	free(stag);
 	free(tag);
+	free(sorig);
 
-	/* Truncate string here and duplicate contents of tag. */
-	pend[0] = '\0';
-	if ((contents = strdup(pst)) == NULL)
+	/* Success! */
+	return (0);
+
+err5:
+	free(contents);
+err4:
+	for (i = 0; i < strarray_getsize(vallist); i++)
+		free(*strarray_get(vallist, i));
+	strarray_free(vallist);
+err3:
+	free(stag);
+err2:
+	free(tag);
+err1:
+	free(sorig);
+err0:
+	/* Failure! */
+	return (-1);
+}
+
+static char *
+xmlextract(const char * _s, const char * tagname)
+{
+	char ** vals;
+	size_t nvals;
+	char * contents;
+
+	/* Extract all of the tags, if any. */
+	if (xmlextracts(_s, tagname, &vals, &nvals))
+		goto err0;
+
+	/* There should be at least one such tag. */
+	if (nvals == 0) {
+		errno = 0;
 		goto err1;
+	}
 
-	/* Free duplicated input string. */
-	free(s);
+	/* Pull out the first tag contents. */
+	contents = vals[0];
+
+	/* Free everything else we were passed. */
+	while (nvals > 1)
+		free(vals[--nvals]);
+	free(vals);
 
 	/* Return contents of tag. */
 	return (contents);
 
-err2:
-	errno = 0;
-	free(tag);
 err1:
-	free(s);
+	while (nvals > 0)
+		free(vals[--nvals]);
+	free(vals);
 err0:
 	/* Failure! */
 	return (NULL);
+}
+
+static int
+getregionlist(const char * key_id, const char * key_secret,
+    const char * region, char *** regions, size_t * nregions)
+{
+	char * resp;
+	char * regionInfo;
+
+	/* Ask EC2 for a list of regions. */
+	if ((resp = ec2_apicall(key_id, key_secret, region,
+	    "Action=DescribeRegions&"
+	    "Version=2014-09-01")) == NULL)
+		goto err0;
+
+	/* Extract the <regionInfo>. */
+	if ((regionInfo = xmlextract(resp, "regionInfo")) == NULL) {
+		warnp("Could not find regionInfo in DescribeRegions response:\n%s\n",
+		    resp);
+		goto err1;
+	}
+
+	/* Extract the <regionName> tags. */
+	if (xmlextracts(regionInfo, "regionName", regions, nregions))
+		goto err2;
+
+	/* Sanity-check: There should be at least 1 region. */
+	if (*nregions == 0) {
+		warn0("Could not find any regions in DescribeRegions response:\n%s\n",
+		    resp);
+		goto err3;
+	}
+
+	/* Free the response and extracted regionInfo strings. */
+	free(regionInfo);
+	free(resp);
+
+	/* Success! */
+	return (0);
+
+err3:
+	while (*nregions > 0)
+		free((*regions)[--(*nregions)]);
+	free(*regions);
+err2:
+	free(regionInfo);
+err1:
+	free(resp);
+err0:
+	/* Failure! */
+	return (-1);
 }
 
 static char *
@@ -1300,13 +1400,15 @@ main(int argc, char * argv[])
 	const char * keyfile;
 	char * key_id;
 	char * key_secret;
+	char ** regions;
+	size_t nregions;
 	char * manifest;
 	uint64_t size;
 	char * taskid;
 	char * volume;
 	char * snapshot;
 	char * ami;
-	char * amis[NREGIONS];
+	char ** amis;
 	size_t i;
 
 	WARNP_INIT;
@@ -1340,6 +1442,12 @@ main(int argc, char * argv[])
 	/* Load AWS keys. */
 	if (readkeys(keyfile, &key_id, &key_secret)) {
 		warnp("Cannot read AWS keys");
+		exit(1);
+	}
+
+	/* Get list of AWS regions. */
+	if (getregionlist(key_id, key_secret, region, &regions, &nregions)) {
+		warnp("Failure getting list of AWS regions");
 		exit(1);
 	}
 
@@ -1402,8 +1510,14 @@ main(int argc, char * argv[])
 		exit(0);
 	}
 
+	/* Allocate array of AMI names. */
+	if ((amis = malloc(nregions * sizeof(char *))) == NULL) {
+		warnp("malloc");
+		exit(1);
+	}
+
 	/* Copy images into the regions. */
-	for (i = 0; i < NREGIONS; i++) {
+	for (i = 0; i < nregions; i++) {
 		/* Don't copy to the region where we built the image. */
 		if (strcmp(regions[i], region) == 0) {
 			if ((amis[i] = strdup(ami)) == NULL) {
@@ -1422,7 +1536,7 @@ main(int argc, char * argv[])
 
 	/* Mark images as public. */
 	fprintf(stderr, "Marking images as public...");
-	for (i = 0; i < NREGIONS; i++) {
+	for (i = 0; i < nregions; i++) {
 		if (makepublic(regions[i], amis[i], key_id, key_secret)) {
 			warnp("Error marking AMI as public");
 			exit(1);
@@ -1431,7 +1545,7 @@ main(int argc, char * argv[])
 	fprintf(stderr, " done.\n");
 
 	/* Print the list of AMIs. */
-	for (i = 0; i < NREGIONS; i++)
+	for (i = 0; i < nregions; i++)
 		printf("Created AMI in %s region: %s\n", regions[i], amis[i]);
 
 	return (0);
