@@ -20,6 +20,7 @@ IDIRS	+=	-I libcperciva/datastruct
 SRCS	+=	asprintf.c
 SRCS	+=	entropy.c
 SRCS	+=	hexify.c
+SRCS	+=	insecure_memzero.c
 SRCS	+=	rfc3986.c
 SRCS	+=	warnp.c
 IDIRS	+=	-I libcperciva/util
