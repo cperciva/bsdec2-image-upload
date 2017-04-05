@@ -850,7 +850,7 @@ err0:
 }
 
 static void
-printstatus(char * prefix, char * status, char ** laststatus)
+printstatus(const char * prefix, char * status, char ** laststatus)
 {
 
 	/* Comparing old status to new status... */
