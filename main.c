@@ -321,8 +321,8 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 		"<file-format>RAW</file-format>"
 		"<importer>"
 		    "<name>bsdec2-image-upload</name>"
-		    "<version>1.1.0</version>"
-		    "<release>2014-11-29</release>"
+		    "<version>1.1.1</version>"
+		    "<release>2017-05-24</release>"
 		"</importer>"
 		"<self-destruct-url>https://%s.s3.amazonaws.com%s?%s</self-destruct-url>"
 		"<import>"
@@ -1126,7 +1126,8 @@ err0:
 
 static char *
 registerimage(const char * region, const char * snapshot, const char * name,
-    const char * desc, int sriov, const char * key_id, const char * key_secret)
+    const char * desc, int sriov, int ena,
+    const char * key_id, const char * key_secret)
 {
 	char * nameenc;
 	char * descenc;
@@ -1149,6 +1150,7 @@ registerimage(const char * region, const char * snapshot, const char * name,
 	    "RootDeviceName=%%2Fdev%%2Fsda1&"
 	    "VirtualizationType=hvm&"
 	    "%s"
+	    "%s"
 	    "BlockDeviceMapping.0.DeviceName=%%2Fdev%%2Fsda1&"
 	    "BlockDeviceMapping.0.Ebs.SnapshotId=%s&"
 	    "BlockDeviceMapping.0.Ebs.VolumeType=gp2&"
@@ -1161,8 +1163,9 @@ registerimage(const char * region, const char * snapshot, const char * name,
 	    "BlockDeviceMapping.3.VirtualName=ephemeral2&"
 	    "BlockDeviceMapping.4.DeviceName=%%2Fdev%%2Fsde&"
 	    "BlockDeviceMapping.4.VirtualName=ephemeral3&"
-	    "Version=2014-09-01",
+	    "Version=2016-11-15",
 	    nameenc, descenc, sriov ? "SriovNetSupport=simple&" : "",
+	    ena ? "EnaSupport=true&" : "",
 	    snapshot) == -1)
 		goto err2;
 
@@ -1392,6 +1395,7 @@ main(int argc, char * argv[])
 {
 	int public = 0;
 	int sriov = 0;
+	int ena = 0;
 	const char * diskimg;
 	const char * name;
 	const char * desc;
@@ -1419,6 +1423,8 @@ main(int argc, char * argv[])
 			public = 1;
 		else if (strcmp(argv[1], "--sriov") == 0)
 			sriov = 1;
+		else if (strcmp(argv[1], "--ena") == 0)
+			ena = 1;
 		else
 			break;
 		argc--;
@@ -1427,7 +1433,9 @@ main(int argc, char * argv[])
 
 	/* Sanity-check. */
 	if (argc != 7) {
-		fprintf(stderr, "usage: bsdec2-image-upload [--public] %s %s %s %s %s %s\n",
+		fprintf(stderr, "usage: bsdec2-image-upload [--public]"
+		    " [--sriov] [--ena]"
+		    " %s %s %s %s %s %s\n",
 		    "<disk image>", "<name>", "<description>",
 		    "<region>", "<bucket>", "<AWS keyfile>");
 		exit(1);
@@ -1492,7 +1500,7 @@ main(int argc, char * argv[])
 	}
 
 	/* Register an image. */
-	if ((ami = registerimage(region, snapshot, name, desc, sriov,
+	if ((ami = registerimage(region, snapshot, name, desc, sriov, ena,
 	    key_id, key_secret)) == NULL) {
 		warnp("Failure registering AMI");
 		exit(1);
