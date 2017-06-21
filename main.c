@@ -321,8 +321,8 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 		"<file-format>RAW</file-format>"
 		"<importer>"
 		    "<name>bsdec2-image-upload</name>"
-		    "<version>1.1.1</version>"
-		    "<release>2017-05-24</release>"
+		    "<version>1.1.2</version>"
+		    "<release>2017-06-21</release>"
 		"</importer>"
 		"<self-destruct-url>https://%s.s3.amazonaws.com%s?%s</self-destruct-url>"
 		"<import>"
@@ -887,7 +887,7 @@ waitforimport(const char * region, const char * taskid,
 		/* Generate EC2 API request. */
 		if (asprintf(&s,
 		    "Action=DescribeConversionTasks&"
-		    "ConversionTaskId.0=%s&"
+		    "ConversionTaskId.1=%s&"
 		    "Version=2014-09-01",
 		    taskid) == -1)
 			goto err0;
@@ -1017,7 +1017,7 @@ waitforsnapshot(const char * region, const char * snapshot,
 		/* Generate EC2 API request. */
 		if (asprintf(&s,
 		    "Action=DescribeSnapshots&"
-		    "SnapshotId.0=%s&"
+		    "SnapshotId.1=%s&"
 		    "Version=2014-09-01",
 		    snapshot) == -1)
 			goto err0;
@@ -1151,18 +1151,18 @@ registerimage(const char * region, const char * snapshot, const char * name,
 	    "VirtualizationType=hvm&"
 	    "%s"
 	    "%s"
-	    "BlockDeviceMapping.0.DeviceName=%%2Fdev%%2Fsda1&"
-	    "BlockDeviceMapping.0.Ebs.SnapshotId=%s&"
-	    "BlockDeviceMapping.0.Ebs.VolumeType=gp2&"
-	    "BlockDeviceMapping.0.Ebs.VolumeSize=10&"
-	    "BlockDeviceMapping.1.DeviceName=%%2Fdev%%2Fsdb&"
-	    "BlockDeviceMapping.1.VirtualName=ephemeral0&"
-	    "BlockDeviceMapping.2.DeviceName=%%2Fdev%%2Fsdc&"
-	    "BlockDeviceMapping.2.VirtualName=ephemeral1&"
-	    "BlockDeviceMapping.3.DeviceName=%%2Fdev%%2Fsdd&"
-	    "BlockDeviceMapping.3.VirtualName=ephemeral2&"
-	    "BlockDeviceMapping.4.DeviceName=%%2Fdev%%2Fsde&"
-	    "BlockDeviceMapping.4.VirtualName=ephemeral3&"
+	    "BlockDeviceMapping.1.DeviceName=%%2Fdev%%2Fsda1&"
+	    "BlockDeviceMapping.1.Ebs.SnapshotId=%s&"
+	    "BlockDeviceMapping.1.Ebs.VolumeType=gp2&"
+	    "BlockDeviceMapping.1.Ebs.VolumeSize=10&"
+	    "BlockDeviceMapping.2.DeviceName=%%2Fdev%%2Fsdb&"
+	    "BlockDeviceMapping.2.VirtualName=ephemeral0&"
+	    "BlockDeviceMapping.3.DeviceName=%%2Fdev%%2Fsdc&"
+	    "BlockDeviceMapping.3.VirtualName=ephemeral1&"
+	    "BlockDeviceMapping.4.DeviceName=%%2Fdev%%2Fsdd&"
+	    "BlockDeviceMapping.4.VirtualName=ephemeral2&"
+	    "BlockDeviceMapping.5.DeviceName=%%2Fdev%%2Fsde&"
+	    "BlockDeviceMapping.5.VirtualName=ephemeral3&"
 	    "Version=2016-11-15",
 	    nameenc, descenc, sriov ? "SriovNetSupport=simple&" : "",
 	    ena ? "EnaSupport=true&" : "",
@@ -1223,7 +1223,7 @@ waitforami(const char * region, const char * ami,
 		/* Generate EC2 API request. */
 		if (asprintf(&s,
 		    "Action=DescribeImages&"
-		    "ImageId.0=%s&"
+		    "ImageId.1=%s&"
 		    "Version=2014-09-01",
 		    ami) == -1)
 			goto err0;
@@ -1357,7 +1357,7 @@ makepublic(const char * region, const char * ami,
 	if (asprintf(&s,
 	    "Action=ModifyImageAttribute&"
 	    "ImageId=%s&"
-	    "LaunchPermission.Add.0.Group=all&"
+	    "LaunchPermission.Add.1.Group=all&"
 	    "Version=2014-09-01",
 	    ami) == -1)
 		goto err0;
