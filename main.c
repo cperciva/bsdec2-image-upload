@@ -260,6 +260,24 @@ err0:
 	return (-1);
 }
 
+static int
+s3_put_loop(const char * key_id, const char * key_secret, const char * region,
+    const char * bucket, const char * path, const uint8_t * buf, size_t buflen)
+{
+	int i;
+
+	/* Try up to 10 times. */
+	for (i = 0; i < 10; i++) {
+		if (s3_put(key_id, key_secret, region, bucket, path,
+		    buf, buflen) == 0)
+			return (0);
+		fprintf(stderr, "S3 PUT failed %d times: %s\n", i + 1, path);
+	}
+
+	/* Give up. */
+	return (-1);
+}
+
 static char *
 uploadvolume(const char * fname, const char * region, const char * bucket,
     uint64_t * size, const char * key_id, const char * key_secret)
@@ -365,7 +383,7 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 			goto err3;
 
 		/* Upload to S3. */
-		if (s3_put(key_id, key_secret, region, bucket, path,
+		if (s3_put_loop(key_id, key_secret, region, bucket, path,
 		    buf, buflen)) {
 			warnp("PUT failed");
 			goto err4;
@@ -464,7 +482,7 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 		free(s);
 		goto err2;
 	}
-	if (s3_put(key_id, key_secret, region, bucket, path, s, len)) {
+	if (s3_put_loop(key_id, key_secret, region, bucket, path, s, len)) {
 		free(path);
 		free(s);
 		goto err2;
