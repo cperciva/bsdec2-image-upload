@@ -630,6 +630,25 @@ err0:
 	return (NULL);
 }
 
+static char *
+ec2_apicall_loop(const char * key_id, const char * key_secret,
+    const char * region, const char * s)
+{
+	char * body;
+	int i;
+
+	/* Try up to 10 times. */
+	for (i = 0; i < 10; i++) {
+		body = ec2_apicall(key_id, key_secret, region, s);
+		if (body != NULL)
+			return (body);
+		fprintf(stderr, "EC2 API call failed %d times\n", i + 1);
+	}
+
+	/* Give up. */
+	return (NULL);
+}
+
 static int
 xmlextracts(const char * _s, const char * tagname,
     char *** vals, size_t * nvals)
@@ -755,7 +774,7 @@ getregionlist(const char * key_id, const char * key_secret,
 	char * regionInfo;
 
 	/* Ask EC2 for a list of regions. */
-	if ((resp = ec2_apicall(key_id, key_secret, region,
+	if ((resp = ec2_apicall_loop(key_id, key_secret, region,
 	    "Action=DescribeRegions&"
 	    "Version=2014-09-01")) == NULL)
 		goto err0;
@@ -911,7 +930,7 @@ waitforimport(const char * region, const char * taskid,
 			goto err0;
 
 		/* Issue API request. */
-		if ((resp = ec2_apicall(key_id, key_secret, region, s))
+		if ((resp = ec2_apicall_loop(key_id, key_secret, region, s))
 		    == NULL)
 			goto err1;
 
@@ -1041,7 +1060,7 @@ waitforsnapshot(const char * region, const char * snapshot,
 			goto err0;
 
 		/* Issue API request. */
-		if ((resp = ec2_apicall(key_id, key_secret, region, s))
+		if ((resp = ec2_apicall_loop(key_id, key_secret, region, s))
 		    == NULL)
 			goto err1;
 
@@ -1247,7 +1266,7 @@ waitforami(const char * region, const char * ami,
 			goto err0;
 
 		/* Issue API request. */
-		if ((resp = ec2_apicall(key_id, key_secret, region, s))
+		if ((resp = ec2_apicall_loop(key_id, key_secret, region, s))
 		    == NULL)
 			goto err1;
 
@@ -1381,7 +1400,7 @@ makepublic(const char * region, const char * ami,
 		goto err0;
 
 	/* Issue API request. */
-	if ((resp = ec2_apicall(key_id, key_secret, region, s)) == NULL)
+	if ((resp = ec2_apicall_loop(key_id, key_secret, region, s)) == NULL)
 		goto err1;
 
 	/* Make sure that we succeeded. */
