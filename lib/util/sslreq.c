@@ -37,6 +37,7 @@ sslreq(const char * host, const char * port, const char * certfile,
 	char hostname[256];
 	int readlen;
 	size_t resppos;
+	int on = 1;
 
 	/* Create resolver hints structure. */
 	memset(&hints, 0, sizeof(hints));
@@ -68,6 +69,10 @@ sslreq(const char * host, const char * port, const char * certfile,
 	/* Did we manage to connect? */
 	if (r == NULL)
 		return "Could not connect";
+
+	/* Disable SIGPIPE on this socket. */
+	if (setsockopt(s, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on)))
+		return "Could not disable SIGPIPE";
 
 	/* Launch SSL. */
 	if (!SSL_library_init())
