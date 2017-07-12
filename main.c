@@ -260,6 +260,24 @@ err0:
 	return (-1);
 }
 
+static int
+s3_put_loop(const char * key_id, const char * key_secret, const char * region,
+    const char * bucket, const char * path, const uint8_t * buf, size_t buflen)
+{
+	int i;
+
+	/* Try up to 10 times. */
+	for (i = 0; i < 10; i++) {
+		if (s3_put(key_id, key_secret, region, bucket, path,
+		    buf, buflen) == 0)
+			return (0);
+		fprintf(stderr, "S3 PUT failed %d times: %s\n", i + 1, path);
+	}
+
+	/* Give up. */
+	return (-1);
+}
+
 static char *
 uploadvolume(const char * fname, const char * region, const char * bucket,
     uint64_t * size, const char * key_id, const char * key_secret)
@@ -321,8 +339,8 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 		"<file-format>RAW</file-format>"
 		"<importer>"
 		    "<name>bsdec2-image-upload</name>"
-		    "<version>1.1.2</version>"
-		    "<release>2017-06-21</release>"
+		    "<version>1.1.3</version>"
+		    "<release>2017-07-11</release>"
 		"</importer>"
 		"<self-destruct-url>https://%s.s3.amazonaws.com%s?%s</self-destruct-url>"
 		"<import>"
@@ -365,7 +383,7 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 			goto err3;
 
 		/* Upload to S3. */
-		if (s3_put(key_id, key_secret, region, bucket, path,
+		if (s3_put_loop(key_id, key_secret, region, bucket, path,
 		    buf, buflen)) {
 			warnp("PUT failed");
 			goto err4;
@@ -464,7 +482,7 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 		free(s);
 		goto err2;
 	}
-	if (s3_put(key_id, key_secret, region, bucket, path, s, len)) {
+	if (s3_put_loop(key_id, key_secret, region, bucket, path, s, len)) {
 		free(path);
 		free(s);
 		goto err2;
@@ -612,6 +630,25 @@ err0:
 	return (NULL);
 }
 
+static char *
+ec2_apicall_loop(const char * key_id, const char * key_secret,
+    const char * region, const char * s)
+{
+	char * body;
+	int i;
+
+	/* Try up to 10 times. */
+	for (i = 0; i < 10; i++) {
+		body = ec2_apicall(key_id, key_secret, region, s);
+		if (body != NULL)
+			return (body);
+		fprintf(stderr, "EC2 API call failed %d times\n", i + 1);
+	}
+
+	/* Give up. */
+	return (NULL);
+}
+
 static int
 xmlextracts(const char * _s, const char * tagname,
     char *** vals, size_t * nvals)
@@ -737,7 +774,7 @@ getregionlist(const char * key_id, const char * key_secret,
 	char * regionInfo;
 
 	/* Ask EC2 for a list of regions. */
-	if ((resp = ec2_apicall(key_id, key_secret, region,
+	if ((resp = ec2_apicall_loop(key_id, key_secret, region,
 	    "Action=DescribeRegions&"
 	    "Version=2014-09-01")) == NULL)
 		goto err0;
@@ -893,7 +930,7 @@ waitforimport(const char * region, const char * taskid,
 			goto err0;
 
 		/* Issue API request. */
-		if ((resp = ec2_apicall(key_id, key_secret, region, s))
+		if ((resp = ec2_apicall_loop(key_id, key_secret, region, s))
 		    == NULL)
 			goto err1;
 
@@ -1023,7 +1060,7 @@ waitforsnapshot(const char * region, const char * snapshot,
 			goto err0;
 
 		/* Issue API request. */
-		if ((resp = ec2_apicall(key_id, key_secret, region, s))
+		if ((resp = ec2_apicall_loop(key_id, key_secret, region, s))
 		    == NULL)
 			goto err1;
 
@@ -1229,7 +1266,7 @@ waitforami(const char * region, const char * ami,
 			goto err0;
 
 		/* Issue API request. */
-		if ((resp = ec2_apicall(key_id, key_secret, region, s))
+		if ((resp = ec2_apicall_loop(key_id, key_secret, region, s))
 		    == NULL)
 			goto err1;
 
@@ -1363,7 +1400,7 @@ makepublic(const char * region, const char * ami,
 		goto err0;
 
 	/* Issue API request. */
-	if ((resp = ec2_apicall(key_id, key_secret, region, s)) == NULL)
+	if ((resp = ec2_apicall_loop(key_id, key_secret, region, s)) == NULL)
 		goto err1;
 
 	/* Make sure that we succeeded. */
