@@ -200,8 +200,23 @@ s3_put(const char * key_id, const char * key_secret, const char * region,
 
 	/* Construct S3 endpoint name. */
 	if (strcmp(region, "us-east-1")) {
-		if (asprintf(&host, "s3-%s.amazonaws.com", region) == -1)
-			goto err2;
+		if (  strcmp(region, "us-west-1")
+	    	   && strcmp(region, "us-west-2")
+	    	   && strcmp(region, "ap-southeast-1")
+	    	   && strcmp(region, "ap-southeast-2")
+	    	   && strcmp(region, "ap-northeast-1")
+	    	   && strcmp(region, "eu-west-1")
+	    	   && strcmp(region, "sa-east-1") ) {
+			/* These regions need s3.region.amazonaws.com because the
+			 * common name will be *.s3.region.amazonaws.com */
+		     	if (asprintf(&host, "s3.%s.amazonaws.com", region) == -1)
+				goto err2;
+		} else {
+			/* These regions need s3-region.amazonaws.com because the
+			 * common name will be *.s3-region.amazonaws.com */
+			if (asprintf(&host, "s3-%s.amazonaws.com", region) == -1)
+				goto err2;
+		}
 	} else {
 		if (asprintf(&host, "s3.amazonaws.com", region) == -1)
 			goto err2;
