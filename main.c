@@ -339,8 +339,8 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 		"<file-format>RAW</file-format>"
 		"<importer>"
 		    "<name>bsdec2-image-upload</name>"
-		    "<version>1.1.3</version>"
-		    "<release>2017-07-11</release>"
+		    "<version>1.1.4</version>"
+		    "<release>2018-06-24</release>"
 		"</importer>"
 		"<self-destruct-url>https://%s.s3.amazonaws.com%s?%s</self-destruct-url>"
 		"<import>"
@@ -940,10 +940,13 @@ waitforimport(const char * region, const char * taskid,
 			goto err2;
 		}
 
-		/* Is there an <id> tag? */
-		if ((volid = xmlextract(volume, "id")) != NULL) {
-			/* We're done! */
-			break;
+		/* Is the status something other than "active"? */
+		if (strstr(resp, "<state>active</state>") == NULL) {
+			/* Is there an <id> tag? */
+			if ((volid = xmlextract(volume, "id")) != NULL) {
+				/* We're done! */
+				break;
+			}
 		}
 
 		/* Look for a <statusMessage> tag. */
