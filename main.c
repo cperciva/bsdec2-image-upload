@@ -1344,13 +1344,6 @@ copyimage(const char * region, const char * ami, const char * toregion,
 	    region, ami) == -1)
 		goto err0;
 
-	/*
-	 * Say what we're doing.  Include ... here because AMIs will usually
-	 * be ready as soon as this API call returns, so there won't be any
-	 * spinning in DescribeImages to produce dots.
-	 */
-	fprintf(stderr, "Copying AMI to %s", toregion);
-
 	/* Issue API request. */
 	if ((resp = ec2_apicall(key_id, key_secret, toregion, s)) == NULL)
 		goto err1;
@@ -1366,13 +1359,6 @@ copyimage(const char * region, const char * ami, const char * toregion,
 
 	/* Free request. */
 	free(s);
-
-	/* Wait for AMI to finish copying. */
-	if (waitforami(toregion, toami, key_id, key_secret)) {
-		warnp("Failure waiting for AMI");
-		free(toami);
-		goto err0;
-	}
 
 	/* Return AMI. */
 	return (toami);
@@ -1774,6 +1760,7 @@ main(int argc, char * argv[])
 	}
 
 	/* Copy images into the regions. */
+	fprintf(stderr, "Copying AMI to regions:");
 	for (i = 0; i < nregions; i++) {
 		/* Don't copy to the region where we built the image. */
 		if (strcmp(regions[i], region) == 0) {
@@ -1784,9 +1771,24 @@ main(int argc, char * argv[])
 			continue;
 		}
 
+		fprintf(stderr, " %s", regions[i]);
 		if ((amis[i] = copyimage(region, ami, regions[i],
 		    key_id, key_secret)) == NULL) {
 			warnp("Error copying AMI to region %s", regions[i]);
+			exit(1);
+		}
+	}
+	fprintf(stderr, ".\n");
+
+	/* Wait for the copying to complete. */
+	for (i = 0; i < nregions; i++) {
+		if (strcmp(regions[i], region) == 0)
+			continue;
+
+		/* Wait for AMI to finish copying. */
+		fprintf(stderr, "Waiting for AMI copying to %s...", regions[i]);
+		if (waitforami(regions[i], amis[i], key_id, key_secret)) {
+			warnp("Failure waiting for AMI");
 			exit(1);
 		}
 	}
