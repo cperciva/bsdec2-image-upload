@@ -34,20 +34,26 @@ char * aws_sign_s3_querystr(const char *, const char *, const char *,
     const char *, const char *, const char *, int);
 
 /**
- * aws_sign_ec2_headers(key_id, key_secret, region, body, bodylen,
+ * aws_sign_svc_headers(key_id, key_secret, region, svc, body, bodylen,
  *     x_amz_content_sha256, x_amz_date, authorization):
  * Return values ${x_amz_content_sha256}, ${x_amz_date}, and ${authorization}
  * such that
  *     POST / HTTP/1.1
- *     Host: ec2.${region}.amazonaws.com
+ *     Host: ${svc}.${region}.amazonaws.com
  *     X-Amz-Date: ${x_amz_date}
  *     X-Amz-Content-SHA256: ${x_amz_content_sha256}
  *     Authorization: ${authorization}
  *     Content-Length: ${bodylen}
  *     <${body}>
- * is a correctly signed request to the ${region} EC2 region.
+ * is a correctly signed request to the ${region} region of the ${svc}
+ * service.  This is known to be useful for API calls to EC2 and SNS.
  */
-int aws_sign_ec2_headers(const char *, const char *, const char *,
-    const uint8_t *, size_t, char **, char **, char **);
+int aws_sign_svc_headers(const char *, const char *, const char *,
+    const char *, const uint8_t *, size_t, char **, char **, char **);
+
+#define aws_sign_ec2_headers(a, b, c, d, e, f, g, h) \
+    aws_sign_svc_headers(a, b, c, "ec2", d, e, f, g, h)
+#define aws_sign_sns_headers(a, b, c, d, e, f, g, h) \
+    aws_sign_svc_headers(a, b, c, "sns", d, e, f, g, h)
 
 #endif /* !_AWS_SIGN_ */

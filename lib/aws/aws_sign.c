@@ -258,22 +258,24 @@ err0:
 }
 
 /**
- * aws_sign_ec2_headers(key_id, key_secret, region, body, bodylen,
+ * aws_sign_svc_headers(key_id, key_secret, region, svc, body, bodylen,
  *     x_amz_content_sha256, x_amz_date, authorization):
  * Return values ${x_amz_content_sha256}, ${x_amz_date}, and ${authorization}
  * such that
  *     POST / HTTP/1.1
- *     Host: ec2.${region}.amazonaws.com
+ *     Host: ${svc}.${region}.amazonaws.com
  *     X-Amz-Date: ${x_amz_date}
  *     X-Amz-Content-SHA256: ${x_amz_content_sha256}
  *     Authorization: ${authorization}
  *     Content-Length: ${bodylen}
  *     <${body}>
- * is a correctly signed request to the ${region} EC2 region.
+ * is a correctly signed request to the ${region} region of the ${svc}
+ * service.  This is known to be useful for API calls to EC2 and SNS.
  */
 int
-aws_sign_ec2_headers(const char * key_id, const char * key_secret,
-    const char * region, const uint8_t * body, size_t bodylen,
+aws_sign_svc_headers(const char * key_id, const char * key_secret,
+    const char * region, const char * svc,
+    const uint8_t * body, size_t bodylen,
     char ** x_amz_content_sha256, char ** x_amz_date, char ** authorization)
 {
 	time_t t_now;
@@ -311,27 +313,27 @@ aws_sign_ec2_headers(const char * key_id, const char * key_secret,
 	    "POST\n"
 	    "/\n"
 	    "\n"
-	    "host:ec2.%s.amazonaws.com\n"
+	    "host:%s.%s.amazonaws.com\n"
 	    "x-amz-content-sha256:%s\n"
 	    "x-amz-date:%s\n"
 	    "\n"
 	    "host;x-amz-content-sha256;x-amz-date\n"
 	    "%s",
-	    region, content_sha256, datetime, content_sha256) == -1)
+	    svc, region, content_sha256, datetime, content_sha256) == -1)
 		goto err0;
 
 	/* Compute request signature. */
 	if (aws_sign(key_secret, date, datetime, region,
-	    "ec2", canonical_request, sigbuf))
+	    svc, canonical_request, sigbuf))
 		goto err1;
 
 	/* Construct Authorization header. */
 	if (asprintf(authorization,
 	    "AWS4-HMAC-SHA256 "
-	    "Credential=%s/%s/%s/ec2/aws4_request,"
+	    "Credential=%s/%s/%s/%s/aws4_request,"
 	    "SignedHeaders=host;x-amz-content-sha256;x-amz-date,"
 	    "Signature=%s",
-	    key_id, date, region, sigbuf) == -1)
+	    key_id, date, region, svc, sigbuf) == -1)
 		goto err1;
 
 	/* Duplicate X-Amz-Content-SHA256 and X-Amz-Date headers. */
