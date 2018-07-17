@@ -1430,6 +1430,205 @@ err0:
 	return (-1);
 }
 
+static int
+sns_publish(const char * key_id, const char * key_secret, const char * region,
+    const char * topicarn, const char * releaseversion,
+    const char * imageversion,  const char * name,
+    size_t nregions, char ** regions, char ** amis)
+{
+	char * msg_subject;
+	char * msg_topicarn;
+	STR message;
+	char * msg_message;
+	size_t i;
+	char * s;
+	char * x_amz_content_sha256;
+	char * x_amz_date;
+	char * authorization;
+	char * req;
+	char * host;
+	size_t len;
+	const char * errstr;
+	uint8_t * resp;
+	size_t resplen;
+	size_t pos;
+	uint8_t * body;
+
+	/* Construct message subject. */
+	if (asprintf(&msg_subject, "New %s AMIs", releaseversion) == -1)
+		goto err0;
+	if ((msg_subject = encodeamp(msg_subject)) == NULL)
+		goto err0;
+
+	/* Duplicate and encode Topic ARN. */
+	if (asprintf(&msg_topicarn, "%s", topicarn) == -1)
+		goto err1;
+	if ((msg_topicarn = encodeamp(msg_topicarn)) == NULL)
+		goto err1;
+
+#define WRITE(a, b) do {				\
+	if (str_append(a, b, strlen(b))) {		\
+		str_free(a);				\
+		goto err2;				\
+	}						\
+} while (0)
+
+	/* Create an elastic string for the message XML. */
+	if ((message = str_init(0)) == NULL)
+		goto err2;
+	WRITE(message, "{\n  \"v1\": {\n    \"ReleaseVersion\": \"");
+	WRITE(message, releaseversion);
+	WRITE(message, "\",\n    \"ImageVersion\": \"");
+	WRITE(message, imageversion);
+	WRITE(message, "\",\n    \"Regions\": {\n");
+	for (i = 0; i < nregions; i++) {
+		WRITE(message, "      \"");
+		WRITE(message, regions[i]);
+		WRITE(message, "\": [\n        {\n");
+		WRITE(message, "          \"Name\": \"");
+		WRITE(message, name);
+		WRITE(message, "\",\n");
+		WRITE(message, "          \"ImageId\": \"");
+		WRITE(message, amis[i]);
+		WRITE(message, "\"\n        }\n      ]");
+		if (i != nregions - 1) {
+			WRITE(message, ",");
+		}
+		WRITE(message, "\n");
+	}
+	WRITE(message, "    }\n  }\n}");
+	if (str_append(message, "\0", 1)) {
+		str_free(message);
+		goto err2;
+	}
+#undef WRITE
+
+	/* Export string and encode. */
+	if (str_export(message, &msg_message, &len)) {
+		str_free(message);
+		goto err2;
+	}
+
+	/* Construct request. */
+	if (asprintf(&s, "Action=Publish&Message=%s&"
+	    "Subject=%s&TopicArn=%s&Version=2010-03-31",
+	    msg_message, msg_subject, msg_topicarn) == -1)
+		goto err3;
+
+	/* Sign request. */
+	if (aws_sign_sns_headers(key_id, key_secret, region, s, strlen(s),
+	    &x_amz_content_sha256, &x_amz_date, &authorization)) {
+		warnp("Failed to sign SNS POST request");
+		goto err4;
+	}
+
+	/* Construct request and compute length. */
+	if (asprintf(&req,
+	    "POST / HTTP/1.0\r\n"
+	    "Host: sns.%s.amazonaws.com\r\n"
+	    "X-Amz-Date: %s\r\n"
+	    "X-Amz-Content-SHA256: %s\r\n"
+	    "Authorization: %s\r\n"
+	    "Content-Length: %zu\r\n"
+	    "Content-Type: application/x-www-form-urlencoded\r\n"
+	    "Connection: close\r\n"
+	    "\r\n"
+	    "%s",
+	    region, x_amz_date, x_amz_content_sha256, authorization,
+	    strlen(s), s) == -1)
+		goto err5;
+	len = strlen(req);
+
+	/* Construct SNS endpoint name. */
+	if (asprintf(&host, "sns.%s.amazonaws.com", region) == -1)
+		goto err6;
+
+	/* Allocate space for a 16 kB response plus a trailing NUL. */
+	resplen = 16384;
+	if ((resp = malloc(resplen + 1)) == NULL)
+		goto err7;
+
+	/* Send the request. */
+	if ((errstr = sslreq(host, "443", CERTFILE, req, len, resp, &resplen))
+	    != NULL) {
+		warnp("SSL request failed: %s", errstr);
+		goto err8;
+	}
+
+	/* NUL-terminate the response. */
+	resp[resplen] = '\0';
+
+	/* SNS API responses should not contain NUL bytes. */
+	if (strlen(resp) != resplen) {
+		warnp("NUL byte in SNS API response");
+		goto err8;
+	}
+
+        /* Find the end of the first line. */
+        pos = strcspn(resp, "\r\n");
+
+        /* Look for a "200" status on the first line. */
+        if ((strstr(resp, " 200 ") == NULL) ||
+            (strstr(resp, " 200 ") > (char *)&resp[pos])) {
+		warnp("SNS API request failed:\n%s\n", resp);
+		goto err8;
+	}
+
+	/* Find the end of the headers. */
+	if ((body = strstr(resp, "\r\n\r\n")) == NULL) {
+		warnp("Bad SNS API response received:\n%s\n", resp);
+		goto err8;
+	}
+
+	/* Skip to the start of the response body. */
+	body = &body[4];
+
+	/* Make sure there's a MessageId. */
+	if (strstr(body, "<MessageId>") == NULL) {
+		warnp("SNS API call failed?\n%s\n", body);
+		goto err8;
+	}
+
+	/* Free response buffer. */
+	free(resp);
+
+	/* Free request buffers. */
+	free(host);
+	free(req);
+	free(authorization);
+	free(x_amz_date);
+	free(x_amz_content_sha256);
+	free(s);
+	free(msg_message);
+	free(msg_topicarn);
+	free(msg_subject);
+
+	/* Success! */
+	return (0);
+
+err8:
+	free(resp);
+err7:
+	free(host);
+err6:
+	free(req);
+err5:
+	free(authorization);
+	free(x_amz_date);
+	free(x_amz_content_sha256);
+err4:
+	free(s);
+err3:
+	free(msg_message);
+err2:
+	free(msg_topicarn);
+err1:
+	free(msg_subject);
+err0:
+	/* Failure! */
+	return (-1);
+}
+
 int
 main(int argc, char * argv[])
 {
@@ -1442,6 +1641,9 @@ main(int argc, char * argv[])
 	const char * region;
 	const char * bucket;
 	const char * keyfile;
+	const char * topicarn = NULL;
+	const char * releaseversion;
+	const char * imageversion;
 	char * key_id;
 	char * key_secret;
 	char ** regions;
@@ -1472,12 +1674,14 @@ main(int argc, char * argv[])
 	}
 
 	/* Sanity-check. */
-	if (argc != 7) {
+	if ((argc != 7) && (argc != 10)) {
 		fprintf(stderr, "usage: bsdec2-image-upload [--public]"
 		    " [--sriov] [--ena]"
-		    " %s %s %s %s %s %s\n",
+		    " %s %s %s %s %s %s [%s %s %s]\n",
 		    "<disk image>", "<name>", "<description>",
-		    "<region>", "<bucket>", "<AWS keyfile>");
+		    "<region>", "<bucket>", "<AWS keyfile>",
+		    "<topicarn>", "<releaseversion>", "<imageversion>"
+		);
 		exit(1);
 	}
 	diskimg = argv[1];
@@ -1486,6 +1690,11 @@ main(int argc, char * argv[])
 	region = argv[4];
 	bucket = argv[5];
 	keyfile = argv[6];
+	if (argc == 10) {
+		topicarn = argv[7];
+		releaseversion = argv[8];
+		imageversion = argv[9];
+	}
 
 	/* Load AWS keys. */
 	if (readkeys(keyfile, &key_id, &key_secret)) {
@@ -1595,6 +1804,15 @@ main(int argc, char * argv[])
 	/* Print the list of AMIs. */
 	for (i = 0; i < nregions; i++)
 		printf("Created AMI in %s region: %s\n", regions[i], amis[i]);
+
+	/* Try to send an SNS notification if desired. */
+	if (topicarn) {
+		if (sns_publish(key_id, key_secret, region, topicarn,
+		    releaseversion, imageversion, name,
+		    nregions, regions, amis)) {
+			warnp("Failed to send SNS notification");
+		}
+	}
 
 	return (0);
 }
