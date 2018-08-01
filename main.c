@@ -1417,6 +1417,50 @@ err0:
 }
 
 static int
+makesnappublic(const char * region, const char * snapshot,
+    const char * key_id, const char * key_secret)
+{
+	char * s;
+	char * resp;
+
+	/* Generate EC2 API request. */
+	if (asprintf(&s,
+	    "Action=ModifySnapshotAttribute&"
+	    "SnapshotId=%s&"
+	    "CreateVolumePermission.Add.1.Group=all&"
+	    "Version=2014-09-01",
+	    snapshot) == -1)
+		goto err0;
+
+	/* Issue API request. */
+	if ((resp = ec2_apicall_loop(key_id, key_secret, region, s)) == NULL)
+		goto err1;
+
+	/* Make sure that we succeeded. */
+	if (strstr(resp, "<return>true</return>") == NULL) {
+		warnp("ModifySnapshotAttribute failed: %s", resp);
+		goto err2;
+	}
+
+	/* Free API response. */
+	free(resp);
+
+	/* Free request. */
+	free(s);
+
+	/* Return AMI. */
+	return (0);
+
+err2:
+	free(resp);
+err1:
+	free(s);
+err0:
+	/* Failure! */
+	return (-1);
+}
+
+static int
 sns_publish(const char * key_id, const char * key_secret, const char * region,
     const char * topicarn, const char * releaseversion,
     const char * imageversion,  const char * name,
@@ -1619,6 +1663,7 @@ int
 main(int argc, char * argv[])
 {
 	int public = 0;
+	int publicsnap = 0;
 	int sriov = 0;
 	int ena = 0;
 	const char * diskimg;
@@ -1645,10 +1690,12 @@ main(int argc, char * argv[])
 
 	WARNP_INIT;
 
-	/* Look for --public and/or --sriov flags. */
+	/* Look for flags concerning image metadata. */
 	while (argc > 1) {
 		if (strcmp(argv[1], "--public") == 0)
 			public = 1;
+		else if (strcmp(argv[1], "--publicsnap") == 0)
+			publicsnap = 1;
 		else if (strcmp(argv[1], "--sriov") == 0)
 			sriov = 1;
 		else if (strcmp(argv[1], "--ena") == 0)
@@ -1662,7 +1709,7 @@ main(int argc, char * argv[])
 	/* Sanity-check. */
 	if ((argc != 7) && (argc != 10)) {
 		fprintf(stderr, "usage: bsdec2-image-upload [--public]"
-		    " [--sriov] [--ena]"
+		    " [--publicsnap] [--sriov] [--ena]"
 		    " %s %s %s %s %s %s [%s %s %s]\n",
 		    "<disk image>", "<name>", "<description>",
 		    "<region>", "<bucket>", "<AWS keyfile>",
@@ -1732,6 +1779,16 @@ main(int argc, char * argv[])
 	if (deletevolume(region, volume, key_id, key_secret)) {
 		warnp("Failure deleting EBS volume");
 		exit(1);
+	}
+
+	/* Mark snapshot as public. */
+	if (publicsnap) {
+		fprintf(stderr, "Marking %s in %s as public...", snapshot, region);
+		if (makesnappublic(region, snapshot, key_id, key_secret)) {
+			warnp("Error marking EBS snapshot as public");
+			exit(1);
+		}
+		fprintf(stderr, " done.\n");
 	}
 
 	/* Register an image. */
