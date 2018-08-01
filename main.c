@@ -1461,7 +1461,7 @@ err0:
 }
 
 static int
-sns_publish(const char * key_id, const char * key_secret, const char * region,
+sns_publish(const char * key_id, const char * key_secret,
     const char * topicarn, const char * releaseversion,
     const char * imageversion,  const char * name,
     size_t nregions, char ** regions, char ** amis)
@@ -1472,6 +1472,7 @@ sns_publish(const char * key_id, const char * key_secret, const char * region,
 	char * msg_message;
 	size_t i;
 	char * s;
+	char * region;
 	char * x_amz_content_sha256;
 	char * x_amz_date;
 	char * authorization;
@@ -1545,11 +1546,20 @@ sns_publish(const char * key_id, const char * key_secret, const char * region,
 	    msg_message, msg_subject, msg_topicarn) == -1)
 		goto err3;
 
+	/*
+	 * Figure out which region to make the request to.  SNS topic ARNs
+	 * always start with "arn:aws:sns:<region>:" so we can skip the
+	 * first 12 bytes and then stop at the next ':'.
+	 */
+	if ((region = strdup(&topicarn[12])) == NULL)
+		goto err4;
+	region[strcspn(region, ":")] = '\0';
+
 	/* Sign request. */
 	if (aws_sign_sns_headers(key_id, key_secret, region, s, strlen(s),
 	    &x_amz_content_sha256, &x_amz_date, &authorization)) {
 		warnp("Failed to sign SNS POST request");
-		goto err4;
+		goto err5;
 	}
 
 	/* Construct request and compute length. */
@@ -1566,23 +1576,23 @@ sns_publish(const char * key_id, const char * key_secret, const char * region,
 	    "%s",
 	    region, x_amz_date, x_amz_content_sha256, authorization,
 	    strlen(s), s) == -1)
-		goto err5;
+		goto err6;
 	len = strlen(req);
 
 	/* Construct SNS endpoint name. */
 	if (asprintf(&host, "sns.%s.amazonaws.com", region) == -1)
-		goto err6;
+		goto err7;
 
 	/* Allocate space for a 16 kB response plus a trailing NUL. */
 	resplen = 16384;
 	if ((resp = malloc(resplen + 1)) == NULL)
-		goto err7;
+		goto err8;
 
 	/* Send the request. */
 	if ((errstr = sslreq(host, "443", CERTFILE, req, len, resp, &resplen))
 	    != NULL) {
 		warnp("SSL request failed: %s", errstr);
-		goto err8;
+		goto err9;
 	}
 
 	/* NUL-terminate the response. */
@@ -1591,7 +1601,7 @@ sns_publish(const char * key_id, const char * key_secret, const char * region,
 	/* SNS API responses should not contain NUL bytes. */
 	if (strlen(resp) != resplen) {
 		warnp("NUL byte in SNS API response");
-		goto err8;
+		goto err9;
 	}
 
         /* Find the end of the first line. */
@@ -1601,13 +1611,13 @@ sns_publish(const char * key_id, const char * key_secret, const char * region,
         if ((strstr(resp, " 200 ") == NULL) ||
             (strstr(resp, " 200 ") > (char *)&resp[pos])) {
 		warnp("SNS API request failed:\n%s\n", resp);
-		goto err8;
+		goto err9;
 	}
 
 	/* Find the end of the headers. */
 	if ((body = strstr(resp, "\r\n\r\n")) == NULL) {
 		warnp("Bad SNS API response received:\n%s\n", resp);
-		goto err8;
+		goto err9;
 	}
 
 	/* Skip to the start of the response body. */
@@ -1616,7 +1626,7 @@ sns_publish(const char * key_id, const char * key_secret, const char * region,
 	/* Make sure there's a MessageId. */
 	if (strstr(body, "<MessageId>") == NULL) {
 		warnp("SNS API call failed?\n%s\n", body);
-		goto err8;
+		goto err9;
 	}
 
 	/* Free response buffer. */
@@ -1628,6 +1638,7 @@ sns_publish(const char * key_id, const char * key_secret, const char * region,
 	free(authorization);
 	free(x_amz_date);
 	free(x_amz_content_sha256);
+	free(region);
 	free(s);
 	free(msg_message);
 	free(msg_topicarn);
@@ -1636,16 +1647,18 @@ sns_publish(const char * key_id, const char * key_secret, const char * region,
 	/* Success! */
 	return (0);
 
-err8:
+err9:
 	free(resp);
-err7:
+err8:
 	free(host);
-err6:
+err7:
 	free(req);
-err5:
+err6:
 	free(authorization);
 	free(x_amz_date);
 	free(x_amz_content_sha256);
+err5:
+	free(region);
 err4:
 	free(s);
 err3:
@@ -1866,7 +1879,7 @@ main(int argc, char * argv[])
 
 	/* Try to send an SNS notification if desired. */
 	if (topicarn) {
-		if (sns_publish(key_id, key_secret, region, topicarn,
+		if (sns_publish(key_id, key_secret, topicarn,
 		    releaseversion, imageversion, name,
 		    nregions, regions, amis)) {
 			warnp("Failed to send SNS notification");
