@@ -1166,11 +1166,12 @@ err0:
 
 static char *
 registerimage(const char * region, const char * snapshot, const char * name,
-    const char * desc, int sriov, int ena,
+    const char * desc, const char * arch, int sriov, int ena,
     const char * key_id, const char * key_secret)
 {
 	char * nameenc;
 	char * descenc;
+	char * archenc;
 	char * s;
 	char * resp;
 	char * ami;
@@ -1180,13 +1181,15 @@ registerimage(const char * region, const char * snapshot, const char * name,
 		goto err0;
 	if ((descenc = rfc3986_encode(desc)) == NULL)
 		goto err1;
+	if ((archenc = rfc3986_encode(arch)) == NULL)
+		goto err1;
 
 	/* Generate EC2 API request. */
 	if (asprintf(&s,
 	    "Action=RegisterImage&"
 	    "Name=%s&"
 	    "Description=%s&"
-	    "Architecture=x86_64&"
+	    "Architecture=%s&"
 	    "RootDeviceName=%%2Fdev%%2Fsda1&"
 	    "VirtualizationType=hvm&"
 	    "%s"
@@ -1204,7 +1207,7 @@ registerimage(const char * region, const char * snapshot, const char * name,
 	    "BlockDeviceMapping.5.DeviceName=%%2Fdev%%2Fsde&"
 	    "BlockDeviceMapping.5.VirtualName=ephemeral3&"
 	    "Version=2016-11-15",
-	    nameenc, descenc, sriov ? "SriovNetSupport=simple&" : "",
+	    nameenc, descenc, archenc, sriov ? "SriovNetSupport=simple&" : "",
 	    ena ? "EnaSupport=true&" : "",
 	    snapshot) == -1)
 		goto err2;
@@ -1688,6 +1691,7 @@ main(int argc, char * argv[])
 	const char * topicarn = NULL;
 	const char * releaseversion;
 	const char * imageversion;
+	const char * arch;
 	char * key_id;
 	char * key_secret;
 	char ** regions;
@@ -1720,13 +1724,14 @@ main(int argc, char * argv[])
 	}
 
 	/* Sanity-check. */
-	if ((argc != 7) && (argc != 10)) {
+	if ((argc != 7) && (argc != 8) && (argc != 10) && (argc != 11)) {
 		fprintf(stderr, "usage: bsdec2-image-upload [--public]"
 		    " [--publicsnap] [--sriov] [--ena]"
-		    " %s %s %s %s %s %s [%s %s %s]\n",
+		    " %s %s %s %s %s %s [%s %s %s] [%s]\n",
 		    "<disk image>", "<name>", "<description>",
 		    "<region>", "<bucket>", "<AWS keyfile>",
-		    "<topicarn>", "<releaseversion>", "<imageversion>"
+		    "<topicarn>", "<releaseversion>", "<imageversion>",
+		    "<arch>"
 		);
 		exit(1);
 	}
@@ -1736,10 +1741,17 @@ main(int argc, char * argv[])
 	region = argv[4];
 	bucket = argv[5];
 	keyfile = argv[6];
-	if (argc == 10) {
+	if (argc >= 10) {
 		topicarn = argv[7];
 		releaseversion = argv[8];
 		imageversion = argv[9];
+	}
+	if (argc == 11) {
+		arch = argv[10];
+	} else if (argc == 8) {
+		arch = argv[7];
+	} else {
+		arch = "x86_64";
 	}
 
 	/* Load AWS keys. */
@@ -1805,7 +1817,7 @@ main(int argc, char * argv[])
 	}
 
 	/* Register an image. */
-	if ((ami = registerimage(region, snapshot, name, desc, sriov, ena,
+	if ((ami = registerimage(region, snapshot, name, desc, arch, sriov, ena,
 	    key_id, key_secret)) == NULL) {
 		warnp("Failure registering AMI");
 		exit(1);
