@@ -1166,11 +1166,12 @@ err0:
 
 static char *
 registerimage(const char * region, const char * snapshot, const char * name,
-    const char * desc, int sriov, int ena,
+    const char * desc, const char * arch, int sriov, int ena,
     const char * key_id, const char * key_secret)
 {
 	char * nameenc;
 	char * descenc;
+	char * archenc;
 	char * s;
 	char * resp;
 	char * ami;
@@ -1180,13 +1181,15 @@ registerimage(const char * region, const char * snapshot, const char * name,
 		goto err0;
 	if ((descenc = rfc3986_encode(desc)) == NULL)
 		goto err1;
+	if ((archenc = rfc3986_encode(arch)) == NULL)
+		goto err2;
 
 	/* Generate EC2 API request. */
 	if (asprintf(&s,
 	    "Action=RegisterImage&"
 	    "Name=%s&"
 	    "Description=%s&"
-	    "Architecture=x86_64&"
+	    "Architecture=%s&"
 	    "RootDeviceName=%%2Fdev%%2Fsda1&"
 	    "VirtualizationType=hvm&"
 	    "%s"
@@ -1204,10 +1207,10 @@ registerimage(const char * region, const char * snapshot, const char * name,
 	    "BlockDeviceMapping.5.DeviceName=%%2Fdev%%2Fsde&"
 	    "BlockDeviceMapping.5.VirtualName=ephemeral3&"
 	    "Version=2016-11-15",
-	    nameenc, descenc, sriov ? "SriovNetSupport=simple&" : "",
+	    nameenc, descenc, archenc, sriov ? "SriovNetSupport=simple&" : "",
 	    ena ? "EnaSupport=true&" : "",
 	    snapshot) == -1)
-		goto err2;
+		goto err3;
 
 	/*
 	 * Say what we're doing.  Include ... here because AMIs will usually
@@ -1218,12 +1221,12 @@ registerimage(const char * region, const char * snapshot, const char * name,
 
 	/* Issue API request. */
 	if ((resp = ec2_apicall(key_id, key_secret, region, s)) == NULL)
-		goto err3;
+		goto err4;
 
 	/* Find <imageId> tag. */
 	if ((ami = xmlextract(resp, "imageId")) == NULL) {
 		warnp("Could not find <imageId> in RegisterImage response: %s", resp);
-		goto err4;
+		goto err5;
 	}
 
 	/* Free API response. */
@@ -1231,16 +1234,19 @@ registerimage(const char * region, const char * snapshot, const char * name,
 
 	/* Free request and parts thereof. */
 	free(s);
+	free(archenc);
 	free(descenc);
 	free(nameenc);
 
 	/* Return AMI. */
 	return (ami);
 
-err4:
+err5:
 	free(resp);
-err3:
+err4:
 	free(s);
+err3:
+	free(archenc);
 err2:
 	free(descenc);
 err1:
@@ -1688,6 +1694,7 @@ main(int argc, char * argv[])
 	const char * topicarn = NULL;
 	const char * releaseversion;
 	const char * imageversion;
+	const char * arch = "x86_64";
 	char * key_id;
 	char * key_secret;
 	char ** regions;
@@ -1713,6 +1720,8 @@ main(int argc, char * argv[])
 			sriov = 1;
 		else if (strcmp(argv[1], "--ena") == 0)
 			ena = 1;
+		else if (strcmp(argv[1], "--arm64") == 0)
+			arch = "arm64";
 		else
 			break;
 		argc--;
@@ -1722,7 +1731,7 @@ main(int argc, char * argv[])
 	/* Sanity-check. */
 	if ((argc != 7) && (argc != 10)) {
 		fprintf(stderr, "usage: bsdec2-image-upload [--public]"
-		    " [--publicsnap] [--sriov] [--ena]"
+		    " [--publicsnap] [--sriov] [--ena] [--arm64]"
 		    " %s %s %s %s %s %s [%s %s %s]\n",
 		    "<disk image>", "<name>", "<description>",
 		    "<region>", "<bucket>", "<AWS keyfile>",
@@ -1805,8 +1814,8 @@ main(int argc, char * argv[])
 	}
 
 	/* Register an image. */
-	if ((ami = registerimage(region, snapshot, name, desc, sriov, ena,
-	    key_id, key_secret)) == NULL) {
+	if ((ami = registerimage(region, snapshot, name, desc, arch, sriov,
+	    ena, key_id, key_secret)) == NULL) {
 		warnp("Failure registering AMI");
 		exit(1);
 	}
