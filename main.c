@@ -17,7 +17,9 @@
 #include "sslreq.h"
 #include "warnp.h"
 
+#ifndef CERTFILE
 #define CERTFILE "/usr/local/share/certs/ca-root-nss.crt"
+#endif
 #define PARTSZ (10 * 1024 * 1024)
 
 /* Elastic string type. */
