@@ -202,7 +202,7 @@ s3_put(const char * key_id, const char * key_secret, const char * region,
 
 	/* Construct S3 endpoint name. */
 	if (strcmp(region, "us-east-1")) {
-		if (asprintf(&host, "s3-%s.amazonaws.com", region) == -1)
+		if (asprintf(&host, "s3.%s.amazonaws.com", region) == -1)
 			goto err2;
 	} else {
 		if (asprintf(&host, "s3.amazonaws.com", region) == -1)
