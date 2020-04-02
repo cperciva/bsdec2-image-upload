@@ -1471,7 +1471,7 @@ err0:
 static int
 sns_publish(const char * key_id, const char * key_secret,
     const char * topicarn, const char * releaseversion,
-    const char * imageversion,  const char * name,
+    const char * imageversion,  const char * name, const char * arch,
     size_t nregions, char ** regions, char ** amis)
 {
 	char * msg_subject;
@@ -1526,6 +1526,9 @@ sns_publish(const char * key_id, const char * key_secret,
 		WRITE(message, "\": [\n        {\n");
 		WRITE(message, "          \"Name\": \"");
 		WRITE(message, name);
+		WRITE(message, "\",\n");
+		WRITE(message, "          \"Architecture\": \"");
+		WRITE(message, arch);
 		WRITE(message, "\",\n");
 		WRITE(message, "          \"ImageId\": \"");
 		WRITE(message, amis[i]);
@@ -1891,7 +1894,7 @@ main(int argc, char * argv[])
 	/* Try to send an SNS notification if desired. */
 	if (topicarn) {
 		if (sns_publish(key_id, key_secret, topicarn,
-		    releaseversion, imageversion, name,
+		    releaseversion, imageversion, name, arch,
 		    nregions, regions, amis)) {
 			warnp("Failed to send SNS notification");
 		}
