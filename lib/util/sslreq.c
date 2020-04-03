@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include <openssl/ssl.h>
+#include <openssl/x509v3.h>
 
 #include "sslreq.h"
 
@@ -32,9 +33,6 @@ sslreq(const char * host, const char * port, const char * certfile,
 	const SSL_METHOD * meth;
 	SSL_CTX * ctx;
 	SSL * ssl;
-	X509 * cert;
-	X509_NAME * name;
-	char hostname[256];
 	int readlen;
 	size_t resppos;
 	int on = 1;
@@ -102,29 +100,24 @@ sslreq(const char * host, const char * port, const char * certfile,
 	if (!SSL_set_fd(ssl, s))
 		return "Could not attach SSL to socket";
 
+	/* Enable SNI; some servers need this to send us the right cert. */
+	if (!SSL_set_tlsext_host_name(ssl, host))
+		return "Could not enable SNI";
+
+	/* Tell OpenSSL which host we're trying to talk to... */
+	if (!SSL_set1_host(ssl, host))
+		return "SSL_set1_host failed";
+
+	/* ... and ask it to make sure that this is what is happening. */
+	SSL_set_hostflags(ssl, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
+	SSL_set_verify(ssl, SSL_VERIFY_PEER, NULL);
+
+	/* Set ssl to work in client mode. */
+	SSL_set_connect_state(ssl);
+
 	/* Perform the SSL handshake. */
 	if (SSL_connect(ssl) != 1)
 		return "SSL handshake failed";
-
-	/* Make sure the server's certificate is valid. */
-	if (SSL_get_verify_result(ssl) != X509_V_OK)
-		return "Could not verify server SSL certificate";
-
-	/* Get the server's certificate. */
-	if ((cert = SSL_get_peer_certificate(ssl)) == NULL)
-		return "Could not get server SSL certificate";
-
-	/* Extract the name. */
-	if ((name = X509_get_subject_name(cert)) == NULL)
-		return "Could not extract subject name from certificate";
-	if (!X509_NAME_get_text_by_NID(name, NID_commonName, hostname, 256))
-		return "Could not extract CN from certificate";
-
-	/* Does the name match? */
-	if (strcasecmp(hostname, host) &&
-	    ((hostname[0] != '*') || (hostname[1] != '.') ||
-	    strcasecmp(&hostname[2], host)))
-		return "Name on SSL certificate does not match server";
 
 	/* Write our HTTP request. */
 	if (SSL_write(ssl, req, reqlen) < reqlen)

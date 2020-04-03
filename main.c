@@ -201,13 +201,8 @@ s3_put(const char * key_id, const char * key_secret, const char * region,
 	len += buflen;
 
 	/* Construct S3 endpoint name. */
-	if (strcmp(region, "us-east-1")) {
-		if (asprintf(&host, "s3.%s.amazonaws.com", region) == -1)
-			goto err2;
-	} else {
-		if (asprintf(&host, "s3.amazonaws.com", region) == -1)
-			goto err2;
-	}
+	if (asprintf(&host, "%s.s3.amazonaws.com", bucket) == -1)
+		goto err2;
 
 	/* Allocate space for a 16 kB response plus a trailing NUL. */
 	resplen = 16384;
