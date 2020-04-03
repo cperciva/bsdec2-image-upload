@@ -1770,9 +1770,23 @@ main(int argc, char * argv[])
 	}
 
 	/* Get list of AWS regions. */
-	if (getregionlist(key_id, key_secret, region, &regions, &nregions)) {
-		warnp("Failure getting list of AWS regions");
-		exit(1);
+	if (allregions) {
+		if (getregionlist(key_id, key_secret, region, &regions,
+		    &nregions)) {
+			warnp("Failure getting list of AWS regions");
+			exit(1);
+		}
+	} else {
+		/* We're only using one region. */
+		if ((regions = malloc(sizeof(char *))) == NULL) {
+			warnp("malloc");
+			exit(1);
+		}
+		if ((regions[0] = strdup(region)) == NULL) {
+			warnp("strdup");
+			exit(1);
+		}
+		nregions = 1;
 	}
 
 	/* Upload disk image. */
@@ -1838,12 +1852,6 @@ main(int argc, char * argv[])
 		exit(1);
 	}
 
-	/* If we're not making public images, stop here. */
-	if (!publicamis) {
-		printf("Created AMI in %s region: %s\n", region, ami);
-		exit(0);
-	}
-
 	/* Allocate array of AMI names. */
 	if ((amis = malloc(nregions * sizeof(char *))) == NULL) {
 		warnp("malloc");
@@ -1851,7 +1859,8 @@ main(int argc, char * argv[])
 	}
 
 	/* Copy images into the regions. */
-	fprintf(stderr, "Copying AMI to regions:");
+	if (allregions)
+		fprintf(stderr, "Copying AMI to regions:");
 	for (i = 0; i < nregions; i++) {
 		/* Don't copy to the region where we built the image. */
 		if (strcmp(regions[i], region) == 0) {
@@ -1869,7 +1878,8 @@ main(int argc, char * argv[])
 			exit(1);
 		}
 	}
-	fprintf(stderr, ".\n");
+	if (allregions)
+		fprintf(stderr, ".\n");
 
 	/* Wait for the copying to complete. */
 	for (i = 0; i < nregions; i++) {
@@ -1885,14 +1895,17 @@ main(int argc, char * argv[])
 	}
 
 	/* Mark images as public. */
-	fprintf(stderr, "Marking images as public...");
-	for (i = 0; i < nregions; i++) {
-		if (makepublic(regions[i], amis[i], key_id, key_secret)) {
-			warnp("Error marking AMI as public");
-			exit(1);
+	if (publicamis) {
+		fprintf(stderr, "Marking images as public...");
+		for (i = 0; i < nregions; i++) {
+			if (makepublic(regions[i], amis[i],
+			    key_id, key_secret)) {
+				warnp("Error marking AMI as public");
+				exit(1);
+			}
 		}
+		fprintf(stderr, " done.\n");
 	}
-	fprintf(stderr, " done.\n");
 
 	/* Print the list of AMIs. */
 	for (i = 0; i < nregions; i++)
