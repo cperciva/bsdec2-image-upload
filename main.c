@@ -1686,7 +1686,8 @@ err0:
 int
 main(int argc, char * argv[])
 {
-	int public = 0;
+	int publicamis = 0;
+	int allregions = 0;
 	int publicsnap = 0;
 	int sriov = 0;
 	int ena = 0;
@@ -1717,10 +1718,15 @@ main(int argc, char * argv[])
 
 	/* Look for flags concerning image metadata. */
 	while (argc > 1) {
-		if (strcmp(argv[1], "--public") == 0)
-			public = 1;
-		else if (strcmp(argv[1], "--publicsnap") == 0)
+		if (strcmp(argv[1], "--public") == 0) {
+			publicamis = 1;
+			allregions = 1;
+		} else if (strcmp(argv[1], "--publicsnap") == 0)
 			publicsnap = 1;
+		else if (strcmp(argv[1], "--publicamis") == 0)
+			publicamis = 1;
+		else if (strcmp(argv[1], "--allregions") == 0)
+			allregions = 1;
 		else if (strcmp(argv[1], "--sriov") == 0)
 			sriov = 1;
 		else if (strcmp(argv[1], "--ena") == 0)
@@ -1736,6 +1742,7 @@ main(int argc, char * argv[])
 	/* Sanity-check. */
 	if ((argc != 7) && (argc != 10)) {
 		fprintf(stderr, "usage: bsdec2-image-upload [--public]"
+		    " [--publicamis] [--allregions]"
 		    " [--publicsnap] [--sriov] [--ena] [--arm64]"
 		    " %s %s %s %s %s %s [%s %s %s]\n",
 		    "<disk image>", "<name>", "<description>",
@@ -1832,7 +1839,7 @@ main(int argc, char * argv[])
 	}
 
 	/* If we're not making public images, stop here. */
-	if (!public) {
+	if (!publicamis) {
 		printf("Created AMI in %s region: %s\n", region, ami);
 		exit(0);
 	}
