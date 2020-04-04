@@ -2,6 +2,7 @@ PROG=	bsdec2-image-upload
 SRCS=	main.c
 MAN	=
 WARNS	?=	3
+CFLAGS	+=	-Wno-error=\#warnings
 BINDIR	?=	/usr/local/bin
 LDADD	+=	-lcrypto -lssl
 
@@ -19,6 +20,7 @@ IDIRS	+=	-I libcperciva/datastruct
 .PATH.c	:	libcperciva/util
 SRCS	+=	asprintf.c
 SRCS	+=	entropy.c
+SRCS	+=	getopt.c
 SRCS	+=	hexify.c
 SRCS	+=	insecure_memzero.c
 SRCS	+=	rfc3986.c

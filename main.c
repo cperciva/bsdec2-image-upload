@@ -13,6 +13,7 @@
 #include "aws_sign.h"
 #include "elasticarray.h"
 #include "entropy.h"
+#include "getopt.h"
 #include "hexify.h"
 #include "rfc3986.h"
 #include "sslreq.h"
@@ -1776,9 +1777,24 @@ err0:
 	return (-1);
 }
 
+static void
+usage(void)
+{
+
+	fprintf(stderr, "usage: bsdec2-image-upload [--public]"
+	    " [--publicamis] [--allregions] [--publicsnap]"
+	    " [--ssm-name <path>] [--sriov] [--ena] [--arm64]"
+	    " %s %s %s %s %s %s [%s %s %s]\n",
+	    "<disk image>", "<name>", "<description>",
+	    "<region>", "<bucket>", "<AWS keyfile>",
+	    "<topicarn>", "<releaseversion>", "<imageversion>");
+	exit(1);
+}
+
 int
 main(int argc, char * argv[])
 {
+	const char * ch;
 	int publicamis = 0;
 	int allregions = 0;
 	int publicsnap = 0;
@@ -1807,55 +1823,62 @@ main(int argc, char * argv[])
 
 	WARNP_INIT;
 
-	/* Look for flags concerning image metadata. */
-	while (argc > 1) {
-		if (strcmp(argv[1], "--public") == 0) {
+	/* Parse command line. */
+	while ((ch = GETOPT(argc, argv)) != NULL) {
+		GETOPT_SWITCH(ch) {
+		GETOPT_OPT("--public"):
 			publicamis = 1;
 			allregions = 1;
-		} else if (strcmp(argv[1], "--publicsnap") == 0)
-			publicsnap = 1;
-		else if (strcmp(argv[1], "--publicamis") == 0)
-			publicamis = 1;
-		else if (strcmp(argv[1], "--allregions") == 0)
-			allregions = 1;
-		else if (strcmp(argv[1], "--sriov") == 0)
-			sriov = 1;
-		else if (strcmp(argv[1], "--ena") == 0)
-			ena = 1;
-		else if (strcmp(argv[1], "--arm64") == 0)
-			arch = "arm64";
-		else if (strcmp(argv[1], "--ssm-name") == 0) {
-			argc--;
-			argv++;
-			ssm_name = argv[1];
-		} else
 			break;
-		argc--;
-		argv++;
+		GETOPT_OPT("--publicsnap"):
+			publicsnap = 1;
+			break;
+		GETOPT_OPT("--publicamis"):
+			publicamis = 1;
+			break;
+		GETOPT_OPT("--allregions"):
+			allregions = 1;
+			break;
+		GETOPT_OPT("--sriov"):
+			sriov = 1;
+			break;
+		GETOPT_OPT("--ena"):
+			ena = 1;
+			break;
+		GETOPT_OPT("--arm64"):
+			arch = "arm64";
+			break;
+		GETOPT_OPTARG("--ssm-name"):
+			ssm_name = optarg;
+			break;
+		GETOPT_MISSING_ARG:
+			fprintf(stderr, "missing argument\n");
+			/* FALLTHROUGH */
+		GETOPT_DEFAULT:
+			usage();
+		}
 	}
+	argc -= optind;
+	argv += optind;
 
-	/* Sanity-check. */
-	if ((argc != 7) && (argc != 10)) {
-		fprintf(stderr, "usage: bsdec2-image-upload [--public]"
-		    " [--publicamis] [--allregions] [--publicsnap]"
-		    " [--ssm-name <path>] [--sriov] [--ena] [--arm64]"
-		    " %s %s %s %s %s %s [%s %s %s]\n",
-		    "<disk image>", "<name>", "<description>",
-		    "<region>", "<bucket>", "<AWS keyfile>",
-		    "<topicarn>", "<releaseversion>", "<imageversion>"
-		);
-		exit(1);
-	}
-	diskimg = argv[1];
-	name = argv[2];
-	desc = argv[3];
-	region = argv[4];
-	bucket = argv[5];
-	keyfile = argv[6];
-	if (argc == 10) {
-		topicarn = argv[7];
-		releaseversion = argv[8];
-		imageversion = argv[9];
+	/* Check number of arguments and assign to variables. */
+	switch (argc) {
+	case 9:
+		topicarn = argv[6];
+		releaseversion = argv[7];
+		imageversion = argv[8];
+		/* FALLTHROUGH */
+	case 6:
+		diskimg = argv[0];
+		name = argv[1];
+		desc = argv[2];
+		region = argv[3];
+		bucket = argv[4];
+		keyfile = argv[5];
+		break;
+	default:
+		/* Wrong number of arguments. */
+		usage();
 	}
 
 	/* Load AWS keys. */
