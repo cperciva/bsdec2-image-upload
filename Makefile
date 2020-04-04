@@ -27,6 +27,7 @@ IDIRS	+=	-I libcperciva/util
 
 # AWS request signing
 .PATH	:	libcperciva/aws
+SRCS	+=	aws_readkeys.c
 SRCS	+=	aws_sign.c
 IDIRS	+=	-I libcperciva/aws
 

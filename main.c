@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "asprintf.h"
+#include "aws_readkeys.h"
 #include "aws_sign.h"
 #include "elasticarray.h"
 #include "entropy.h"
@@ -64,93 +65,6 @@ done:
 
 	/* Return our new string (or NULL if malloc failed). */
 	return (t);
-}
-
-static int
-readkeys(const char * fname, char ** key_id, char ** key_secret)
-{
-	FILE * f;
-	char buf[1024];
-	char * p;
-
-	/* No keys yet. */
-	*key_id = *key_secret = NULL;
-
-	/* Open the key file. */
-	if ((f = fopen(fname, "r")) == NULL) {
-		warnp("fopen(%s)", fname);
-		goto err0;
-	}
-
-	/* Read lines of up to 1024 characters. */
-	while (fgets(buf, sizeof(buf), f) != NULL) {
-		/* Find the first EOL character and truncate. */
-		p = buf + strcspn(buf, "\r\n");
-		if (*p == '\0') {
-			warn0("Missing EOL in %s", fname);
-			break;
-		} else
-			*p = '\0';
-
-		/* Look for the first = character. */
-		p = strchr(buf, '=');
-
-		/* Missing separator? */
-		if (p == NULL)
-			goto err2;
-
-		/* Replace separator with NUL and point p at the value. */
-		*p++ = '\0';
-
-		/* We should have ACCESS_KEY_ID or ACCESS_KEY_SECRET. */
-		if (strcmp(buf, "ACCESS_KEY_ID") == 0) {
-			/* Copy key ID string. */
-			if (*key_id != NULL) {
-				warn0("ACCESS_KEY_ID specified twice");
-				goto err1;
-			}
-			if ((*key_id = strdup(p)) == NULL)
-				goto err1;
-		} else if (strcmp(buf, "ACCESS_KEY_SECRET") == 0) {
-			/* Copy key secret string. */
-			if (*key_secret != NULL) {
-				warn0("ACCESS_KEY_SECRET specified twice");
-				goto err1;
-			}
-			if ((*key_secret = strdup(p)) == NULL)
-				goto err1;
-		} else
-			goto err2;
-	}
-
-	/* Check for error. */
-	if (ferror(f)) {
-		warnp("Error reading %s", fname);
-		goto err1;
-	}
-
-	/* Close the file. */
-	if (fclose(f)) {
-		warnp("fclose");
-		goto err0;
-	}
-
-	/* Check that we got the necessary keys. */
-	if ((*key_id == NULL) || (*key_secret == NULL)) {
-		warn0("Need ACCESS_KEY_ID and ACCESS_KEY_SECRET");
-		goto err0;
-	}
-
-	/* Success! */
-	return (0);
-
-err2:
-	warn0("Lines in %s must be ACCESS_KEY_(ID|SECRET)=...", fname);
-err1:
-	fclose(f);
-err0:
-	/* Failure! */
-	return (-1);
 }
 
 static int
@@ -1945,7 +1859,7 @@ main(int argc, char * argv[])
 	}
 
 	/* Load AWS keys. */
-	if (readkeys(keyfile, &key_id, &key_secret)) {
+	if (aws_readkeys(keyfile, &key_id, &key_secret)) {
 		warnp("Cannot read AWS keys");
 		exit(1);
 	}
