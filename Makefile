@@ -26,9 +26,9 @@ SRCS	+=	warnp.c
 IDIRS	+=	-I libcperciva/util
 
 # AWS request signing
-.PATH	:	lib/aws
+.PATH	:	libcperciva/aws
 SRCS	+=	aws_sign.c
-IDIRS	+=	-I lib/aws
+IDIRS	+=	-I libcperciva/aws
 
 # SSL requests
 .PATH	:	lib/util
