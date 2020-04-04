@@ -359,3 +359,108 @@ err0:
 	return (-1);
 }
 
+/**
+ * aws_sign_svc_tgt_headers(key_id, key_secret, region, op, svc, svctgt,
+ *     body, bodylen, x_amz_content_sha256, x_amz_date, authorization):
+ * Return values ${x_amz_content_sha256}, ${x_amz_date}, and ${authorization}
+ * such that
+ *     POST / HTTP/1.1
+ *     Host: ${svc}.${region}.amazonaws.com
+ *     X-Amz-Date: ${x_amz_date}
+ *     X-Amz-Content-SHA256: ${x_amz_content_sha256}
+ *     X-Amz-Target: ${svctgt}.${op}
+ *     Authorization: ${authorization}
+ *     Content-Length: ${bodylen}
+ *     Content-Type: application/x-amz-json-1.1
+ *     <${body}>
+ * is a correctly signed request to the ${region} region of the ${svc}
+ * service.  This is known to be useful for API calls to Amazon SSM.
+ */
+int
+aws_sign_svc_tgt_headers(const char * key_id, const char * key_secret,
+    const char * region, const char * op, const char * svc,
+    const char * svctgt, const uint8_t * body, size_t bodylen,
+    char ** x_amz_content_sha256, char ** x_amz_date, char ** authorization)
+{
+	time_t t_now;
+	char date[9];
+	char datetime[17];
+	uint8_t hbuf[32];
+	char content_sha256[65];
+	char * canonical_request;
+	char sigbuf[65];
+
+	/* Get the current time. */
+	if (time(&t_now) == (time_t)(-1)) {
+		warnp("time");
+		goto err0;
+	}
+
+	/* Construct date string <yyyymmdd>. */
+	if (strftime(date, 9, "%Y%m%d", gmtime(&t_now)) == 0) {
+		warnp("strftime");
+		goto err0;
+	}
+
+	/* Construct date-and-time string <yyyymmddThhmmssZ>. */
+	if (strftime(datetime, 17, "%Y%m%dT%H%M%SZ", gmtime(&t_now)) == 0) {
+		warnp("strftime");
+		goto err0;
+	}
+
+	/* Compute the hexified SHA256 of the payload. */
+	SHA256_Buf(body, body ? bodylen : 0, hbuf);
+	hexify(hbuf, content_sha256, 32);
+
+	/* Construct Canonical Request. */
+	if (asprintf(&canonical_request,
+	    "POST\n"
+	    "/\n"
+	    "\n"
+	    "host:%s.%s.amazonaws.com\n"
+	    "x-amz-content-sha256:%s\n"
+	    "x-amz-date:%s\n"
+	    "x-amz-target:%s.%s\n"
+	    "\n"
+	    "host;x-amz-content-sha256;x-amz-date;x-amz-target\n"
+	    "%s",
+	    svc, region, content_sha256, datetime, svctgt, op,
+	    content_sha256) == -1)
+		goto err0;
+
+	/* Compute request signature. */
+	if (aws_sign(key_secret, date, datetime, region,
+	    svc, canonical_request, sigbuf))
+		goto err1;
+
+	/* Construct Authorization header. */
+	if (asprintf(authorization,
+	    "AWS4-HMAC-SHA256 "
+	    "Credential=%s/%s/%s/%s/aws4_request,"
+	    "SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-target,"
+	    "Signature=%s",
+	    key_id, date, region, svc, sigbuf) == -1)
+		goto err1;
+
+	/* Duplicate X-Amz-Content-SHA256 and X-Amz-Date headers. */
+	if ((*x_amz_content_sha256 = strdup(content_sha256)) == NULL)
+		goto err2;
+	if ((*x_amz_date = strdup(datetime)) == NULL)
+		goto err3;
+
+	/* Free string allocated by asprintf. */
+	free(canonical_request);
+
+	/* Success! */
+	return (0);
+
+err3:
+	free(*x_amz_content_sha256);
+err2:
+	free(*authorization);
+err1:
+	free(canonical_request);
+err0:
+	/* Failure! */
+	return (-1);
+}
