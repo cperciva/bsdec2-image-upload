@@ -1464,6 +1464,124 @@ err0:
 }
 
 static int
+ssm_store(const char * key_id, const char * key_secret,
+    const char * ssm_name, const char * region, const char * ami)
+{
+	char * s;
+	char * x_amz_content_sha256;
+	char * x_amz_date;
+	char * authorization;
+	char * req;
+	char * host;
+	size_t len;
+	const char * errstr;
+	uint8_t * resp;
+	size_t resplen;
+	size_t pos;
+
+	/* Construct SSM PutParameter request body. */
+	if (asprintf(&s, "{"
+	    "\"Name\":\"%s\","
+	    "\"Value\":\"%s\","
+	    "\"Type\":\"String\","
+	    "\"Overwrite\":true"
+	    "}", ssm_name, ami) == -1)
+		goto err0;
+
+	/* Sign request. */
+	if (aws_sign_ssm_headers(key_id, key_secret, region, "PutParameter",
+	    s, strlen(s), &x_amz_content_sha256, &x_amz_date, &authorization)) {
+		warnp("Failed to sign SSM PutParameter request");
+		goto err1;
+	}
+
+	/* Construct request and compute length. */
+	if (asprintf(&req,
+	    "POST / HTTP/1.0\r\n"
+	    "Host: ssm.%s.amazonaws.com\r\n"
+	    "X-Amz-Date: %s\r\n"
+	    "X-Amz-Content-SHA256: %s\r\n"
+	    "X-Amz-Target: AmazonSSM.PutParameter\r\n"
+	    "Authorization: %s\r\n"
+	    "Content-Length: %zu\r\n"
+	    "Content-Type: application/x-amz-json-1.1\r\n"
+	    "Connection: close\r\n"
+	    "\r\n"
+	    "%s",
+	    region, x_amz_date, x_amz_content_sha256, authorization,
+	    strlen(s), s) == -1)
+		goto err2;
+	len = strlen(req);
+
+	/* Construct EC2 endpoint name. */
+	if (asprintf(&host, "ssm.%s.amazonaws.com", region) == -1)
+		goto err3;
+
+	/* Allocate space for a 16 kB response plus a trailing NUL. */
+	resplen = 16384;
+	if ((resp = malloc(resplen + 1)) == NULL)
+		goto err4;
+
+	/* Send the request. */
+	if ((errstr = sslreq(host, "443", CERTFILE, req, len, resp, &resplen))
+	    != NULL) {
+		warnp("SSL request failed: %s", errstr);
+		goto err5;
+	}
+
+	/* NUL-terminate the response. */
+	resp[resplen] = '\0';
+
+	/* EC2 API responses should not contain NUL bytes. */
+	if (strlen(resp) != resplen) {
+		warnp("NUL byte in SSM API response");
+		goto err5;
+	}
+
+        /* Find the end of the first line. */
+        pos = strcspn(resp, "\r\n");
+
+        /* Look for a "200" status on the first line. */
+        if ((strstr(resp, " 200 ") == NULL) ||
+            (strstr(resp, " 200 ") > (char *)&resp[pos])) {
+		warnp("SSM API request failed:\n%s\n", resp);
+		goto err5;
+	}
+
+	/* If we got an HTTP 200, assume we succeeded. */
+
+	/* Free response buffer. */
+	free(resp);
+
+	/* Free request buffers. */
+	free(host);
+	free(req);
+	free(authorization);
+	free(x_amz_date);
+	free(x_amz_content_sha256);
+	free(s);
+
+	/* Success! */
+	return (0);
+
+err5:
+	free(resp);
+err4:
+	free(host);
+err3:
+	free(req);
+err2:
+	free(authorization);
+	free(x_amz_date);
+	free(x_amz_content_sha256);
+err1:
+	free(s);
+err0:
+	/* Failure! */
+	return (-1);
+}
+
+static int
 sns_publish(const char * key_id, const char * key_secret,
     const char * topicarn, const char * releaseversion,
     const char * imageversion,  const char * name, const char * arch,
@@ -1696,6 +1814,7 @@ main(int argc, char * argv[])
 	const char * releaseversion;
 	const char * imageversion;
 	const char * arch = "x86_64";
+	const char * ssm_name = NULL;
 	char * key_id;
 	char * key_secret;
 	char ** regions;
@@ -1728,7 +1847,11 @@ main(int argc, char * argv[])
 			ena = 1;
 		else if (strcmp(argv[1], "--arm64") == 0)
 			arch = "arm64";
-		else
+		else if (strcmp(argv[1], "--ssm-name") == 0) {
+			argc--;
+			argv++;
+			ssm_name = argv[1];
+		} else
 			break;
 		argc--;
 		argv++;
@@ -1737,8 +1860,8 @@ main(int argc, char * argv[])
 	/* Sanity-check. */
 	if ((argc != 7) && (argc != 10)) {
 		fprintf(stderr, "usage: bsdec2-image-upload [--public]"
-		    " [--publicamis] [--allregions]"
-		    " [--publicsnap] [--sriov] [--ena] [--arm64]"
+		    " [--publicamis] [--allregions] [--publicsnap]"
+		    " [--ssm-name <path>] [--sriov] [--ena] [--arm64]"
 		    " %s %s %s %s %s %s [%s %s %s]\n",
 		    "<disk image>", "<name>", "<description>",
 		    "<region>", "<bucket>", "<AWS keyfile>",
@@ -1896,6 +2019,20 @@ main(int argc, char * argv[])
 			if (makepublic(regions[i], amis[i],
 			    key_id, key_secret)) {
 				warnp("Error marking AMI as public");
+				exit(1);
+			}
+		}
+		fprintf(stderr, " done.\n");
+	}
+
+	/* Record AMI IDs in SSM Parameter Store. */
+	if (ssm_name) {
+		fprintf(stderr, "Storing AMI Ids in SSM Parameter Store...");
+		for (i = 0; i < nregions; i++) {
+			if (ssm_store(key_id, key_secret, ssm_name,
+			    regions[i], amis[i])) {
+				warnp("Error storing AMI Id for region %s",
+				    regions[i]);
 				exit(1);
 			}
 		}
