@@ -1162,6 +1162,72 @@ err0:
 }
 
 static char *
+uploadraw(const char * diskimg, const char * region, const char * bucket,
+    const char * key_id, const char * key_secret)
+{
+	char * manifest;
+	uint64_t size;
+	char * taskid;
+	char * volume;
+	char * snapshot;
+
+	/* Upload disk image. */
+	if ((manifest = uploadvolume(diskimg, region, bucket,
+	    &size, key_id, key_secret)) == NULL) {
+		warnp("Failure uploading disk image");
+		goto err0;
+	}
+
+	/* Issue ImportVolume call. */
+	if ((taskid = importvolume(region, bucket, manifest, size,
+	    key_id, key_secret)) == NULL) {
+		warnp("Failure importing disk image");
+		goto err1;
+	}
+
+	/* Wait for the volume to be ready. */
+	if ((volume = waitforimport(region, taskid,
+	    key_id, key_secret)) == NULL) {
+		warnp("Failure waiting for EBS volume");
+		goto err2;
+	}
+
+	/* Create a snapshot. */
+	if ((snapshot = createsnapshot(region, volume,
+	    key_id, key_secret)) == NULL) {
+		warnp("Failure creating snapshot");
+		goto err3;
+	}
+
+	/* Wait for the snapshot to be ready. */
+	if (waitforsnapshot(region, snapshot, key_id, key_secret)) {
+		warnp("Failure waiting for EBS snapshot");
+		goto err4;
+	}
+
+	/* Delete the volume now that it is snapshotted. */
+	if (deletevolume(region, volume, key_id, key_secret)) {
+		warnp("Failure deleting EBS volume");
+		goto err4;
+	}
+
+	/* Return the snapshot ID. */
+	return (snapshot);
+
+err4:
+	free(snapshot);
+err3:
+	free(volume);
+err2:
+	free(taskid);
+err1:
+	free(manifest);
+err0:
+	/* Failure! */
+	return (NULL);
+}
+
+static char *
 registerimage(const char * region, const char * snapshot, const char * name,
     const char * desc, const char * arch, int sriov, int ena,
     const char * key_id, const char * key_secret)
@@ -1804,6 +1870,7 @@ main(int argc, char * argv[])
 	int publicsnap = 0;
 	int sriov = 0;
 	int ena = 0;
+	int rawdisk = 1;
 	const char * diskimg;
 	const char * name;
 	const char * desc;
@@ -1819,10 +1886,6 @@ main(int argc, char * argv[])
 	char * key_secret;
 	char ** regions;
 	size_t nregions;
-	char * manifest;
-	uint64_t size;
-	char * taskid;
-	char * volume;
 	char * snapshot;
 	char * ami;
 	char ** amis;
@@ -1907,44 +1970,11 @@ main(int argc, char * argv[])
 		nregions = 1;
 	}
 
-	/* Upload disk image. */
-	if ((manifest = uploadvolume(diskimg, region, bucket,
-	    &size, key_id, key_secret)) == NULL) {
-		warnp("Failure uploading disk image");
-		exit(1);
-	}
-
-	/* Issue ImportVolume call. */
-	if ((taskid = importvolume(region, bucket, manifest, size,
-	    key_id, key_secret)) == NULL) {
-		warnp("Failure importing disk image");
-		exit(1);
-	}
-
-	/* Wait for the volume to be ready. */
-	if ((volume = waitforimport(region, taskid,
-	    key_id, key_secret)) == NULL) {
-		warnp("Failure waiting for EBS volume");
-		exit(1);
-	}
-
-	/* Create a snapshot. */
-	if ((snapshot = createsnapshot(region, volume,
-	    key_id, key_secret)) == NULL) {
-		warnp("Failure creating snapshot");
-		exit(1);
-	}
-
-	/* Wait for the snapshot to be ready. */
-	if (waitforsnapshot(region, snapshot, key_id, key_secret)) {
-		warnp("Failure waiting for EBS snapshot");
-		exit(1);
-	}
-
-	/* Delete the volume now that it is snapshotted. */
-	if (deletevolume(region, volume, key_id, key_secret)) {
-		warnp("Failure deleting EBS volume");
-		exit(1);
+	/* If we have a raw disk image, create a volume and snapshot it. */
+	if (rawdisk) {
+		if ((snapshot = uploadraw(diskimg, region, bucket,
+		    key_id, key_secret)) == NULL)
+			exit(1);
 	}
 
 	/* Mark snapshot as public. */
