@@ -14,16 +14,17 @@
 #include "sslreq.h"
 
 /**
- * sslreq(host, port, certfile, req, reqlen, resp, resplen):
+ * sslreq2(host, port, certfile, req, reqlen, payload, plen, resp, resplen):
  * Establish an SSL connection to ${host}:${port}; verify the authenticity of
  * the server using certificates in ${certfile}; send ${reqlen} bytes from
- * ${req}; and read a response of up to ${*resplen} bytes into ${resp}.  Set
- * ${*resplen} to the length of the response read.  Return NULL on success or
- * an error string.
+ * ${req} and ${plen} bytes from ${payload}; and read a response of up to
+ * ${*resplen} bytes into ${resp}.  Set ${*resplen} to the length of the
+ * response read.  Return NULL on success or an error string.
  */
 const char *
-sslreq(const char * host, const char * port, const char * certfile,
-    const uint8_t * req, int reqlen, uint8_t * resp, size_t * resplen)
+sslreq2(const char * host, const char * port, const char * certfile,
+    const uint8_t * req, int reqlen, const uint8_t * payload, size_t plen,
+    uint8_t * resp, size_t * resplen)
 {
 	struct addrinfo hints;
 	struct addrinfo * res;
@@ -122,6 +123,10 @@ sslreq(const char * host, const char * port, const char * certfile,
 	/* Write our HTTP request. */
 	if (SSL_write(ssl, req, reqlen) < reqlen)
 		return "Could not write request";
+
+	/* Write the payload. */
+	if (payload && !SSL_write_ex(ssl, payload, plen, &plen))
+		return "Could not write payload";
 
 	/* Read the response. */
 	for (resppos = 0; ; resppos += readlen) {

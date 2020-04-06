@@ -77,7 +77,6 @@ s3_put(const char * key_id, const char * key_secret, const char * region,
 	char * authorization;
 	char * host;
 	char * headers;
-	uint8_t * req;
 	const char * errstr;
 	uint8_t * resp;
 	size_t len;
@@ -107,14 +106,6 @@ s3_put(const char * key_id, const char * key_secret, const char * region,
 		goto err1;
 	len = strlen(headers);
 
-	/* Append request body. */
-	if ((req = realloc(headers, len + buflen)) == NULL) {
-		free(headers);
-		goto err1;
-	}
-	memcpy(&req[len], buf, buflen);
-	len += buflen;
-
 	/* Construct S3 endpoint name. */
 	if (asprintf(&host, "%s.s3.amazonaws.com", bucket) == -1)
 		goto err2;
@@ -125,8 +116,8 @@ s3_put(const char * key_id, const char * key_secret, const char * region,
 		goto err3;
 
 	/* Send the request. */
-	if ((errstr = sslreq(host, "443", CERTFILE, req, len, resp, &resplen))
-	    != NULL) {
+	if ((errstr = sslreq2(host, "443", CERTFILE, headers, len,
+	    buf, buflen, resp, &resplen)) != NULL) {
 		warnp("SSL request failed: %s", errstr);
 		goto err4;
 	}
@@ -149,7 +140,7 @@ s3_put(const char * key_id, const char * key_secret, const char * region,
 
 	/* Free request buffers. */
 	free(host);
-	free(req);
+	free(headers);
 	free(authorization);
 	free(x_amz_date);
 	free(x_amz_content_sha256);
@@ -162,7 +153,7 @@ err4:
 err3:
 	free(host);
 err2:
-	free(req);
+	free(headers);
 err1:
 	free(authorization);
 	free(x_amz_date);
