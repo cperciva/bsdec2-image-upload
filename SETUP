@@ -1,0 +1,82 @@
+AWS account setup
+=================
+
+AWS S3 bucket setup
+-------------------
+
+A "staging" S3 bucket must be created.  It is highly recommended that it is
+created with a lifecycle policy which deletes everything after 1 day, since
+bsdec2-image-upload does not remove files from the staging bucket after they
+are no longer needed.
+
+Since this is the bucket into which your image will be initially uploaded,
+it is best to create this in a region which is close to where you build your
+disk images.
+
+The region in which you create the S3 bucket will also be the region in which
+EC2 images are initially created before being copied out to other regions.
+
+SNS topic setup
+---------------
+
+If you want to send SNS notifications, you need to create a topic.
+
+VM Import role
+--------------
+
+If you want to use the --vhd option:
+
+1. Create a 'vmimport' role which can be assumed by the AWS VM Import/Export
+Service:
+
+aws iam create-role --role-name vmimport --assume-role-policy-document \
+    '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":
+     {"Service":"vmie.amazonaws.com"},"Action":"sts:AssumeRole","Condition":
+     {"StringEquals":{"sts:Externalid":"vmimport"}}}]}'
+
+2. Attach a policy to the role:
+
+aws iam put-role-policy --role-name vmimport --policy-name vmimport --policy-document \
+    '{"Version": "2012-10-17","Statement":[{"Effect":"Allow",
+    "Action":["s3:GetBucketLocation","s3:GetObject","s3:ListBucket"],
+    "Resource":["arn:aws:s3:::BUCKETNAME","arn:aws:s3:::BUCKETNAME/*"]},
+    {"Effect":"Allow","Resource":"*","Action":
+    ["ec2:ModifySnapshotAttribute","ec2:CopySnapshot","ec2:Describe*"]}]}'
+
+where BUCKETNAME is replaced by the name of the S3 staging bucket.
+
+AWS key
+-------
+
+The bsdec2-image-upload tool must be provided with a key file of the form
+ACCESS_KEY_ID=<AWS key ID>
+ACCESS_KEY_SECRET=<AWS secret key>
+and the key must have the following permissions:
+	s3:PutObject
+	s3:GetObject
+	ec2:RegisterImage
+	ec2:DescribeImages
+
+If SNS notifications are desired, the following permission is also needed:
+	sns:Publish
+
+If --public or --publicamis is used:
+	ec2:ModifyImageAttribute
+
+If --publicsnap is used:
+	ec2:ModifySnapshotAttribute
+
+If --vhd is used:
+	ec2:ImportSnapshot
+	ec2:DescribeImportSnapshotTasks
+otherwise:
+	s3:DeleteObject
+	ec2:ImportVolume
+	ec2:DescribeConverstionTasks
+	ec2:CreateSnapshot
+	ec2:DescribeSnapshots
+	ec2:DeleteVolume
+
+If --public or --allregions is used:
+	ec2:DescribeRegions
+	ec2:CopyImage
