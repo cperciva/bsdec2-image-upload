@@ -1,4 +1,5 @@
 #include <sys/types.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 
 #include <errno.h>
@@ -1134,6 +1135,203 @@ err0:
 }
 
 static char *
+waitforimportsnapshot(const char * region, const char * taskid,
+    const char * key_id, const char * key_secret)
+{
+	char * s;
+	char * resp;
+	char * snapshot;
+	char * status;
+	char * laststatus = NULL;
+
+	/* Loop until we're finished. */
+	do {
+		/* Generate EC2 API request. */
+		if (asprintf(&s,
+		    "Action=DescribeImportSnapshotTasks&"
+		    "ImportTaskId.1=%s&"
+		    "Version=2016-11-15",
+		    taskid) == -1)
+			goto err0;
+
+		/* Issue API request. */
+		if ((resp = ec2_apicall_loop(key_id, key_secret, region, s))
+		    == NULL)
+			goto err1;
+
+		/* Find <status> tag and stop looping if completed. */
+		if ((status = xmlextract(resp, "status")) == NULL) {
+			warnp("Could not find <status> in DescribeSnapshots response: %s", resp);
+			goto err2;
+		}
+		if (strcmp(status, "completed") == 0)
+			break;
+		free(status);
+
+		/* Look for a <statusMessage> tag. */
+		if ((status = xmlextract(resp, "statusMessage")) == NULL) {
+			warnp("Could not find <statusMessage> in DescribeImportSnapshotTasks response: %s", resp);
+			goto err2;
+		}
+
+		/* Print status as appropriate. */
+		printstatus("Creating snapshot", status, &laststatus);
+
+		/* Free API request and response. */
+		free(s);
+		free(resp);
+
+		/* Wait 10 seconds before making another API call. */
+		sleep(10);
+	} while(1);
+
+	/* We're done! */
+	fprintf(stderr, " done.\n");
+
+	/* Find <SnapshotId> tag. */
+	if ((snapshot = xmlextract(resp, "snapshotId")) == NULL) {
+		warnp("Could not find <snapshotId> in DescribeImportSnapshotTasks response: %s", resp);
+		goto err2;
+	}
+
+	/* Free API request and response. */
+	free(s);
+	free(resp);
+
+	/* Free status and previous status message. */
+	free(status);
+	free(laststatus);
+
+	/* Return snapshot ID. */
+	return (snapshot);
+
+err2:
+	free(resp);
+err1:
+	free(s);
+	free(laststatus);
+err0:
+	/* Failure! */
+	return (NULL);
+}
+
+static char *
+uploadsnap(const char * fname, const char * imgfmt, const char * region,
+    const char * bucket, const char * key_id, const char * key_secret)
+{
+	uint8_t nonce[16];
+	char noncehex[33];
+	FILE * f;
+	struct stat sb;
+	size_t len;
+	void * p;
+	char * s;
+	char * ec2req;
+	char * resp;
+	char * taskid;
+	char * snapshot;
+
+	/* Get a random value to use as a nonce in our paths. */
+	if (entropy_read(nonce, 16)) {
+		warnp("Cannot generate nonce");
+		goto err0;
+	}
+	hexify(nonce, noncehex, 16);
+
+	/* Open the disk image and determine its length. */
+	if ((f = fopen(fname, "r")) == NULL) {
+		warnp("Cannot open disk image: %s", fname);
+		goto err0;
+	}
+	if (fstat(fileno(f), &sb)) {
+		warnp("Cannot stat: %s", fname);
+		goto err1;
+	}
+
+	/* Make sure it's not too big to be mapped into memory. */
+	if ((sb.st_size < 0) ||
+	    ((uintmax_t)(sb.st_size) > (uintmax_t)(SIZE_MAX))) {
+		warn0("Disk image too big to map into memory: %s", fname);
+		goto err1;
+	}
+	len = sb.st_size;
+
+	/* Map the file. */
+	if ((p = mmap(NULL, len, PROT_READ, MAP_PRIVATE | MAP_NOCORE,
+	    fileno(f), 0)) == MAP_FAILED) {
+		warnp("Could not map disk image");
+		goto err1;
+	}
+
+	/* Construct an S3 object name. */
+	if ((asprintf(&s, "/%s/snap.%s", noncehex, imgfmt)) == -1) {
+		warnp("asprintf");
+		goto err2;
+	}
+
+	/* Say what we're doing. */
+	fprintf(stderr, "Uploading %s to\nhttp://%s.s3.amazonaws.com%s\n",
+	    fname, bucket, s);
+
+	/* Upload the disk image. */
+	if (s3_put_loop(key_id, key_secret, region, bucket, s, p, len)) {
+		warnp("Failed to upload disk image");
+		goto err3;
+	}
+
+	/* Generate EC2 API request. */
+	if (asprintf(&ec2req,
+	    "Action=ImportSnapshot&"
+	    "DiskContainer.Url=s3://%s%s&"
+	    "Version=2016-11-15",
+	    bucket, s) == -1)
+		goto err3;
+
+	/* Issue API request. */
+	if ((resp = ec2_apicall(key_id, key_secret, region, ec2req)) == NULL)
+		goto err4;
+
+	/* Extract the conversion task ID. */
+	if ((taskid = xmlextract(resp, "importTaskId")) == NULL) {
+		warnp("Could not find importTaskId in ImportSnapshot response:\n%s\n",
+		    resp);
+		goto err5;
+	}
+
+	/* Wait for the conversion task to complete. */
+	if ((snapshot = waitforimportsnapshot(region, taskid,
+	    key_id, key_secret)) == NULL)
+		goto err6;
+
+	/* Clean up. */
+	free(taskid);
+	free(resp);
+	free(ec2req);
+	free(s);
+	munmap(p, len);
+	fclose(f);
+
+	/* Return snapshot ID. */
+	return (snapshot);
+
+err6:
+	free(taskid);
+err5:
+	free(resp);
+err4:
+	free(ec2req);
+err3:
+	free(s);
+err2:
+	munmap(p, len);
+err1:
+	fclose(f);
+err0:
+	/* Failure! */
+	return (NULL);
+}
+
+static char *
 registerimage(const char * region, const char * snapshot, const char * name,
     const char * desc, const char * arch, int sriov, int ena,
     const char * key_id, const char * key_secret)
@@ -1775,6 +1973,7 @@ usage(void)
 	fprintf(stderr, "usage: bsdec2-image-upload [--public]"
 	    " [--publicamis] [--allregions] [--publicsnap]"
 	    " [--ssm-name <path>] [--sriov] [--ena] [--arm64]"
+	    " [--vhd]"
 	    " %s %s %s %s %s %s [%s %s %s]\n",
 	    "<disk image>", "<name>", "<description>",
 	    "<region>", "<bucket>", "<AWS keyfile>",
@@ -1803,6 +2002,7 @@ main(int argc, char * argv[])
 	const char * imageversion;
 	const char * arch = "x86_64";
 	const char * ssm_name = NULL;
+	const char * imgfmt = NULL;
 	char * key_id;
 	char * key_secret;
 	char ** regions;
@@ -1841,6 +2041,10 @@ main(int argc, char * argv[])
 			break;
 		GETOPT_OPTARG("--ssm-name"):
 			ssm_name = optarg;
+			break;
+		GETOPT_OPT("--vhd"):
+			imgfmt = "vhd";
+			rawdisk = 0;
 			break;
 		GETOPT_MISSING_ARG:
 			fprintf(stderr, "missing argument\n");
@@ -1901,6 +2105,10 @@ main(int argc, char * argv[])
 	/* If we have a raw disk image, create a volume and snapshot it. */
 	if (rawdisk) {
 		if ((snapshot = uploadraw(diskimg, region, bucket,
+		    key_id, key_secret)) == NULL)
+			exit(1);
+	} else {
+		if ((snapshot = uploadsnap(diskimg, imgfmt, region, bucket,
 		    key_id, key_secret)) == NULL)
 			exit(1);
 	}
