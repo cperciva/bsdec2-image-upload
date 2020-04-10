@@ -3,6 +3,7 @@
 
 #include <netinet/in.h>
 
+#include <assert.h>
 #include <netdb.h>
 #include <stdint.h>
 #include <string.h>
@@ -12,6 +13,89 @@
 #include <openssl/x509v3.h>
 
 #include "sslreq.h"
+
+/*
+ * LibreSSL claims to be OpenSSL 2.0, but (currently) has APIs compatible with
+ * OpenSSL 1.0.1g.
+ */
+#ifdef LIBRESSL_VERSION_NUMBER
+#undef OPENSSL_VERSION_NUMBER
+#define OPENSSL_VERSION_NUMBER 0x1000107fL
+#endif
+
+/* Compatibility for OpenSSL pre-1.1.0 */
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+static int
+SSL_set1_host(SSL * ssl, const char * hostname)
+{
+	X509_VERIFY_PARAM * param;
+
+	param = SSL_get0_param(ssl);
+	return (X509_VERIFY_PARAM_set1_host(param, hostname, strlen(hostname)));
+}
+
+static void
+SSL_set_hostflags(SSL * ssl, unsigned int flags)
+{
+	X509_VERIFY_PARAM * param;
+
+	param = SSL_get0_param(ssl);
+	X509_VERIFY_PARAM_set_hostflags(param, flags);
+}
+#endif
+
+/* Compatibility for OpenSSL pre-1.1.1. */
+#if OPENSSL_VERSION_NUMBER < 0x10101000L
+static int
+SSL_write_ex(SSL * ssl, const void * buf, size_t num,
+    size_t * written)
+{
+	int towrite;
+	int ret;
+
+	/* Sanity check. */
+	assert(num > 0);
+
+	/* Nothing written yet. */
+
+	/* Loop until we've written everything. */
+	while(1) {
+		if (num > INT_MAX)
+			towrite = INT_MAX;
+		else
+			towrite = num;
+
+		/* Attempt to send data. */
+		ret = SSL_write(ssl, buf, towrite);
+		if (ret > 0) {
+			/* Sanity check. */
+			assert(ret <= towrite);
+
+			/* Record the number of bytes written. */
+			*written += (size_t)ret;
+			buf = (const uint8_t *)(buf) + (size_t)ret;
+			num -= (size_t)ret;
+
+			/* Are we finished? */
+			if (num == 0) {
+				ret = 1;
+				break;
+			}
+
+			/* Write some more. */
+			continue;
+		} else {
+			/*
+			 * Do nothing here, because ret is a meaningful value for
+			 * determining the error.
+			 */
+			break;
+		}
+	}
+
+	return (ret);
+}
+#endif
 
 /**
  * sslreq2(host, port, certfile, req, reqlen, payload, plen, resp, resplen):
