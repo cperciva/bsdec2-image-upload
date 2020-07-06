@@ -1,6 +1,10 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
+#ifdef __linux__
+#include <signal.h>
+#endif
+
 #include <netinet/in.h>
 
 #include <assert.h>
@@ -153,9 +157,15 @@ sslreq2(const char * host, const char * port, const char * certfile,
 	if (r == NULL)
 		return "Could not connect";
 
-	/* Disable SIGPIPE on this socket. */
-	if (setsockopt(s, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on)))
-		return "Could not disable SIGPIPE";
+    /* Linux does not support SO_NOSIGPIPE
+     * To accomplish the same effect, signal is used, which disables SIGPIPE globally */
+	#ifdef __linux__
+		signal(SIGPIPE, SIG_IGN);
+	#elif
+		/* Disable SIGPIPE on this socket. */
+		if (setsockopt(s, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on)))
+			return "Could not disable SIGPIPE";
+	#endif
 
 	/* Launch SSL. */
 	if (!SSL_library_init())

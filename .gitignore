@@ -1,3 +1,4 @@
 *.d
 *.o
 bsdec2-image-upload
+.depend

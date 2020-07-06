@@ -21,7 +21,12 @@
 #include "warnp.h"
 
 #ifndef CERTFILE
+/* Different cert locations between Linux and BSD */
+#ifdef __linux__
+#define CERTFILE "/etc/ssl/certs/ca-bundle.crt"
+#else
 #define CERTFILE "/usr/local/share/certs/ca-root-nss.crt"
+#endif
 #endif
 #define PARTSZ (10 * 1024 * 1024)
 
@@ -1256,12 +1261,22 @@ uploadsnap(const char * fname, const char * imgfmt, const char * region,
 	}
 	len = sb.st_size;
 
-	/* Map the file. */
-	if ((p = mmap(NULL, len, PROT_READ, MAP_PRIVATE | MAP_NOCORE,
-	    fileno(f), 0)) == MAP_FAILED) {
-		warnp("Could not map disk image");
-		goto err1;
-	}
+
+    /* Linux does not support MAP_NOCORE */
+    #ifdef __linux__
+        if ((p = mmap(NULL, len, PROT_READ, MAP_PRIVATE,
+            fileno(f), 0)) == MAP_FAILED) {
+            warnp("Could not map disk image");
+            goto err1;
+        }
+    #else
+        /* Map the file. */
+        if ((p = mmap(NULL, len, PROT_READ, MAP_PRIVATE | MAP_NOCORE,
+            fileno(f), 0)) == MAP_FAILED) {
+            warnp("Could not map disk image");
+            goto err1;
+        }
+    #endif
 
 	/* Construct an S3 object name. */
 	if ((asprintf(&s, "/%s/snap.%s", noncehex, imgfmt)) == -1) {
@@ -1334,7 +1349,7 @@ err0:
 static char *
 registerimage(const char * region, const char * snapshot, const char * name,
     const char * desc, const char * arch, int sriov, int ena,
-    const char * key_id, const char * key_secret)
+    const char * key_id, const char * key_secret, const char * diskimage)
 {
 	char * nameenc;
 	char * descenc;
@@ -1350,6 +1365,12 @@ registerimage(const char * region, const char * snapshot, const char * name,
 		goto err1;
 	if ((archenc = rfc3986_encode(arch)) == NULL)
 		goto err2;
+    
+    /* Get image size in GB and set to 10 if less than 10 */
+    struct stat st;
+    stat(diskimage, &st);
+    size_t size = st.st_size/(1024 * 1024 * 1024);
+    if(size < 10) size = 10;
 
 	/* Generate EC2 API request. */
 	if (asprintf(&s,
@@ -1364,7 +1385,7 @@ registerimage(const char * region, const char * snapshot, const char * name,
 	    "BlockDeviceMapping.1.DeviceName=%%2Fdev%%2Fsda1&"
 	    "BlockDeviceMapping.1.Ebs.SnapshotId=%s&"
 	    "BlockDeviceMapping.1.Ebs.VolumeType=gp2&"
-	    "BlockDeviceMapping.1.Ebs.VolumeSize=10&"
+	    "BlockDeviceMapping.1.Ebs.VolumeSize=%d&"
 	    "BlockDeviceMapping.2.DeviceName=%%2Fdev%%2Fsdb&"
 	    "BlockDeviceMapping.2.VirtualName=ephemeral0&"
 	    "BlockDeviceMapping.3.DeviceName=%%2Fdev%%2Fsdc&"
@@ -1376,7 +1397,7 @@ registerimage(const char * region, const char * snapshot, const char * name,
 	    "Version=2016-11-15",
 	    nameenc, descenc, archenc, sriov ? "SriovNetSupport=simple&" : "",
 	    ena ? "EnaSupport=true&" : "",
-	    snapshot) == -1)
+	    snapshot, size) == -1)
 		goto err3;
 
 	/*
@@ -2125,7 +2146,7 @@ main(int argc, char * argv[])
 
 	/* Register an image. */
 	if ((ami = registerimage(region, snapshot, name, desc, arch, sriov,
-	    ena, key_id, key_secret)) == NULL) {
+	    ena, key_id, key_secret, diskimg)) == NULL) {
 		warnp("Failure registering AMI");
 		exit(1);
 	}
