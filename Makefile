@@ -2,13 +2,17 @@ PROG=	bsdec2-image-upload
 SRCS=	main.c
 MAN	=
 WARNS	?=	3
-CFLAGS	+=	-Wno-error=\#warnings
 BINDIR	?=	/usr/local/bin
 LDADD	+=	-lcrypto -lssl
-CERTFILE = /usr/local/share/certs/ca-root-nss.crt
 
-#Different certificate file location on Linux
-#CERTFILE = /etc/ssl/certs/ca-bundle.crt
+UNAME_S := $(shell uname -s)
+.if (${UNAME_S},Linux)
+CERTFILE = /etc/ssl/certs/ca-bundle.crt
+CFLAGS += --no-warnings
+.else
+CERTFILE = /usr/local/share/certs/ca-root-nss.crt
+CFLAGS += -Wno-error=\#warnings
+.endif
 
 # Fundamental algorithms
 .PATH.c	:	libcperciva/alg
@@ -44,5 +48,6 @@ IDIRS	+=	-I lib/util
 
 CFLAGS	+=	-g
 CFLAGS	+=	${IDIRS}
+CFLAGS  += -DCERTFILE
 
 .include <bsd.prog.mk>
