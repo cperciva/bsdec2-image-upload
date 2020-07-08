@@ -157,15 +157,18 @@ sslreq2(const char * host, const char * port, const char * certfile,
 	if (r == NULL)
 		return "Could not connect";
 
-    /* Linux does not support SO_NOSIGPIPE
-     * To accomplish the same effect, signal is used, which disables SIGPIPE globally */
-	#ifdef __linux__
-		signal(SIGPIPE, SIG_IGN);
-	#elif
+    /*
+     * Linux does not support SO_NOSIGPIPE.
+     * To accomplish the same effect, signal is used, which disables SIGPIPE globally.
+     */
+#ifndef SO_NOSIGPIPE
+		if (signal(SIGPIPE, SIG_IGN) == SIG_ERR)
+			return "Could not disable SIGPIPE";
+#else
 		/* Disable SIGPIPE on this socket. */
 		if (setsockopt(s, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on)))
 			return "Could not disable SIGPIPE";
-	#endif
+#endif
 
 	/* Launch SSL. */
 	if (!SSL_library_init())

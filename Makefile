@@ -5,6 +5,10 @@ WARNS	?=	3
 CFLAGS	+=	-Wno-error=\#warnings
 BINDIR	?=	/usr/local/bin
 LDADD	+=	-lcrypto -lssl
+CERTFILE = /usr/local/share/certs/ca-root-nss.crt
+
+#Different certificate file location on Linux
+#CERTFILE = /etc/ssl/certs/ca-bundle.crt
 
 # Fundamental algorithms
 .PATH.c	:	libcperciva/alg

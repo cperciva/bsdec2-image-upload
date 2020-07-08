@@ -20,15 +20,12 @@
 #include "sslreq.h"
 #include "warnp.h"
 
-#ifndef CERTFILE
-/* Different cert locations between Linux and BSD */
-#ifdef __linux__
-#define CERTFILE "/etc/ssl/certs/ca-bundle.crt"
-#else
-#define CERTFILE "/usr/local/share/certs/ca-root-nss.crt"
-#endif
-#endif
 #define PARTSZ (10 * 1024 * 1024)
+
+/* Linux does not support MAP_NOCORE. */
+#ifndef MAP_NOCORE
+#define MAP_NOCORE 0
+#endif
 
 /* Elastic string type. */
 ELASTICARRAY_DECL(STR, str, char);
@@ -1261,22 +1258,12 @@ uploadsnap(const char * fname, const char * imgfmt, const char * region,
 	}
 	len = sb.st_size;
 
-
-    /* Linux does not support MAP_NOCORE */
-    #ifdef __linux__
-        if ((p = mmap(NULL, len, PROT_READ, MAP_PRIVATE,
-            fileno(f), 0)) == MAP_FAILED) {
-            warnp("Could not map disk image");
-            goto err1;
-        }
-    #else
-        /* Map the file. */
-        if ((p = mmap(NULL, len, PROT_READ, MAP_PRIVATE | MAP_NOCORE,
-            fileno(f), 0)) == MAP_FAILED) {
-            warnp("Could not map disk image");
-            goto err1;
-        }
-    #endif
+    /* Map the file. */
+    if ((p = mmap(NULL, len, PROT_READ, MAP_PRIVATE | MAP_NOCORE,
+        fileno(f), 0)) == MAP_FAILED) {
+        warnp("Could not map disk image");
+        goto err1;
+    }
 
 	/* Construct an S3 object name. */
 	if ((asprintf(&s, "/%s/snap.%s", noncehex, imgfmt)) == -1) {
