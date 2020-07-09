@@ -186,7 +186,7 @@ s3_put_loop(const char * key_id, const char * key_secret, const char * region,
 
 static char *
 uploadvolume(const char * fname, const char * region, const char * bucket,
-    uint64_t * size, const char * key_id, const char * key_secret)
+    uint64_t * size, const char * key_id, const char * key_secret, size_t * imgsz)
 {
 	FILE * f;
 	struct stat sb;
@@ -217,6 +217,8 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 		warnp("Cannot stat: %s", fname);
 		goto err1;
 	}
+	len = sb.st_size;
+	*imgsz = len;
 
 	/* Allocate a buffer for holding a part. */
 	if ((buf = malloc(buflen)) == NULL)
@@ -1072,7 +1074,7 @@ err0:
 
 static char *
 uploadraw(const char * diskimg, const char * region, const char * bucket,
-    const char * key_id, const char * key_secret)
+    const char * key_id, const char * key_secret, size_t * imgsz)
 {
 	char * manifest;
 	uint64_t size;
@@ -1082,7 +1084,7 @@ uploadraw(const char * diskimg, const char * region, const char * bucket,
 
 	/* Upload disk image. */
 	if ((manifest = uploadvolume(diskimg, region, bucket,
-	    &size, key_id, key_secret)) == NULL) {
+	    &size, key_id, key_secret, imgsz)) == NULL) {
 		warnp("Failure uploading disk image");
 		goto err0;
 	}
@@ -1219,7 +1221,7 @@ err0:
 
 static char *
 uploadsnap(const char * fname, const char * imgfmt, const char * region,
-    const char * bucket, const char * key_id, const char * key_secret)
+    const char * bucket, const char * key_id, const char * key_secret, size_t * imgsz)
 {
 	uint8_t nonce[16];
 	char noncehex[33];
@@ -1257,13 +1259,14 @@ uploadsnap(const char * fname, const char * imgfmt, const char * region,
 		goto err1;
 	}
 	len = sb.st_size;
+	*imgsz = len;
 
-    /* Map the file. */
-    if ((p = mmap(NULL, len, PROT_READ, MAP_PRIVATE | MAP_NOCORE,
-        fileno(f), 0)) == MAP_FAILED) {
-        warnp("Could not map disk image");
-        goto err1;
-    }
+	/* Map the file. */
+	if ((p = mmap(NULL, len, PROT_READ, MAP_PRIVATE | MAP_NOCORE,
+		fileno(f), 0)) == MAP_FAILED) {
+		warnp("Could not map disk image");
+		goto err1;
+	}
 
 	/* Construct an S3 object name. */
 	if ((asprintf(&s, "/%s/snap.%s", noncehex, imgfmt)) == -1) {
@@ -1336,7 +1339,7 @@ err0:
 static char *
 registerimage(const char * region, const char * snapshot, const char * name,
     const char * desc, const char * arch, int sriov, int ena,
-    const char * key_id, const char * key_secret, const char * diskimage)
+    const char * key_id, const char * key_secret, const size_t * imgsz)
 {
 	char * nameenc;
 	char * descenc;
@@ -1353,11 +1356,9 @@ registerimage(const char * region, const char * snapshot, const char * name,
 	if ((archenc = rfc3986_encode(arch)) == NULL)
 		goto err2;
     
-    /* Get image size in GB and set to 10 if less than 10 */
-    struct stat st;
-    stat(diskimage, &st);
-    size_t size = st.st_size/(1024 * 1024 * 1024);
-    if(size < 10) size = 10;
+    /* Get image size in GB and set to 10 if less than 10. */
+    size_t gb_size = (*imgsz)/(1024 * 1024 * 1024);
+    if(gb_size < 10) gb_size = 10;
 
 	/* Generate EC2 API request. */
 	if (asprintf(&s,
@@ -1384,7 +1385,7 @@ registerimage(const char * region, const char * snapshot, const char * name,
 	    "Version=2016-11-15",
 	    nameenc, descenc, archenc, sriov ? "SriovNetSupport=simple&" : "",
 	    ena ? "EnaSupport=true&" : "",
-	    snapshot, size) == -1)
+	    snapshot, gb_size) == -1)
 		goto err3;
 
 	/*
@@ -2110,14 +2111,16 @@ main(int argc, char * argv[])
 		nregions = 1;
 	}
 
+	size_t *imgsz = malloc(sizeof(size_t));
+
 	/* If we have a raw disk image, create a volume and snapshot it. */
 	if (rawdisk) {
 		if ((snapshot = uploadraw(diskimg, region, bucket,
-		    key_id, key_secret)) == NULL)
+		    key_id, key_secret, imgsz)) == NULL)
 			exit(1);
 	} else {
 		if ((snapshot = uploadsnap(diskimg, imgfmt, region, bucket,
-		    key_id, key_secret)) == NULL)
+		    key_id, key_secret, imgsz)) == NULL)
 			exit(1);
 	}
 
@@ -2133,7 +2136,7 @@ main(int argc, char * argv[])
 
 	/* Register an image. */
 	if ((ami = registerimage(region, snapshot, name, desc, arch, sriov,
-	    ena, key_id, key_secret, diskimg)) == NULL) {
+	    ena, key_id, key_secret, imgsz)) == NULL) {
 		warnp("Failure registering AMI");
 		exit(1);
 	}

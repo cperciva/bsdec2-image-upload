@@ -5,13 +5,13 @@ WARNS	?=	3
 BINDIR	?=	/usr/local/bin
 LDADD	+=	-lcrypto -lssl
 
-UNAME_S := $(shell uname -s)
+UNAME_S	:=	$(shell uname -s)
 .if (${UNAME_S},Linux)
-CERTFILE = /etc/ssl/certs/ca-bundle.crt
-CFLAGS += --no-warnings
+CERTFILE	=	\"/etc/ssl/certs/ca-bundle.crt\"
+CFLAGS	+=	--no-warnings
 .else
-CERTFILE = /usr/local/share/certs/ca-root-nss.crt
-CFLAGS += -Wno-error=\#warnings
+CERTFILE	=	\"/usr/local/share/certs/ca-root-nss.crt\"
+CFLAGS	+=	-Wno-error=\#warnings
 .endif
 
 # Fundamental algorithms
@@ -48,6 +48,6 @@ IDIRS	+=	-I lib/util
 
 CFLAGS	+=	-g
 CFLAGS	+=	${IDIRS}
-CFLAGS  += -DCERTFILE
+CFLAGS	+=	-DCERTFILE=${CERTFILE}
 
 .include <bsd.prog.mk>
