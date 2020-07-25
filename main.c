@@ -1070,23 +1070,22 @@ err0:
 
 static char *
 uploadraw(const char * diskimg, const char * region, const char * bucket,
-    const char * key_id, const char * key_secret)
+    const char * key_id, const char * key_secret, uint64_t * imgsz)
 {
 	char * manifest;
-	uint64_t size;
 	char * taskid;
 	char * volume;
 	char * snapshot;
 
 	/* Upload disk image. */
 	if ((manifest = uploadvolume(diskimg, region, bucket,
-	    &size, key_id, key_secret)) == NULL) {
+	    imgsz, key_id, key_secret)) == NULL) {
 		warnp("Failure uploading disk image");
 		goto err0;
 	}
 
 	/* Issue ImportVolume call. */
-	if ((taskid = importvolume(region, bucket, manifest, size,
+	if ((taskid = importvolume(region, bucket, manifest, *imgsz,
 	    key_id, key_secret)) == NULL) {
 		warnp("Failure importing disk image");
 		goto err1;
@@ -1217,7 +1216,8 @@ err0:
 
 static char *
 uploadsnap(const char * fname, const char * imgfmt, const char * region,
-    const char * bucket, const char * key_id, const char * key_secret)
+    const char * bucket, const char * key_id, const char * key_secret,
+    uint64_t * imgsz)
 {
 	uint8_t nonce[16];
 	char noncehex[33];
@@ -1255,6 +1255,7 @@ uploadsnap(const char * fname, const char * imgfmt, const char * region,
 		goto err1;
 	}
 	len = sb.st_size;
+	*imgsz = sb.st_size;
 
 	/* Map the file. */
 	if ((p = mmap(NULL, len, PROT_READ, MAP_PRIVATE | MAP_NOCORE,
@@ -1334,7 +1335,7 @@ err0:
 static char *
 registerimage(const char * region, const char * snapshot, const char * name,
     const char * desc, const char * arch, int sriov, int ena,
-    const char * key_id, const char * key_secret)
+    const char * key_id, const char * key_secret, uint64_t imgsz)
 {
 	char * nameenc;
 	char * descenc;
@@ -1342,6 +1343,17 @@ registerimage(const char * region, const char * snapshot, const char * name,
 	char * s;
 	char * resp;
 	char * ami;
+	int rootsz;
+
+	/* Compute default root disk size based on image size. */
+	if (imgsz <= (uint64_t)(10) << 30)
+		rootsz = 10;
+	else if (imgsz <= (uint64_t)(1000) << 30)
+		rootsz = (imgsz + (1 << 30) - 1) >> 30;
+	else {
+		warn0("Disk image exceeds 1000 GB!");
+		goto err0;
+	}
 
 	/* Encode name and description strings. */
 	if ((nameenc = rfc3986_encode(name)) == NULL)
@@ -1364,7 +1376,7 @@ registerimage(const char * region, const char * snapshot, const char * name,
 	    "BlockDeviceMapping.1.DeviceName=%%2Fdev%%2Fsda1&"
 	    "BlockDeviceMapping.1.Ebs.SnapshotId=%s&"
 	    "BlockDeviceMapping.1.Ebs.VolumeType=gp2&"
-	    "BlockDeviceMapping.1.Ebs.VolumeSize=10&"
+	    "BlockDeviceMapping.1.Ebs.VolumeSize=%d&"
 	    "BlockDeviceMapping.2.DeviceName=%%2Fdev%%2Fsdb&"
 	    "BlockDeviceMapping.2.VirtualName=ephemeral0&"
 	    "BlockDeviceMapping.3.DeviceName=%%2Fdev%%2Fsdc&"
@@ -1376,7 +1388,7 @@ registerimage(const char * region, const char * snapshot, const char * name,
 	    "Version=2016-11-15",
 	    nameenc, descenc, archenc, sriov ? "SriovNetSupport=simple&" : "",
 	    ena ? "EnaSupport=true&" : "",
-	    snapshot) == -1)
+	    snapshot, rootsz) == -1)
 		goto err3;
 
 	/*
@@ -2011,6 +2023,7 @@ main(int argc, char * argv[])
 	char * ami;
 	char ** amis;
 	size_t i;
+	uint64_t imgsz;
 
 	WARNP_INIT;
 
@@ -2105,11 +2118,11 @@ main(int argc, char * argv[])
 	/* If we have a raw disk image, create a volume and snapshot it. */
 	if (rawdisk) {
 		if ((snapshot = uploadraw(diskimg, region, bucket,
-		    key_id, key_secret)) == NULL)
+		    key_id, key_secret, &imgsz)) == NULL)
 			exit(1);
 	} else {
 		if ((snapshot = uploadsnap(diskimg, imgfmt, region, bucket,
-		    key_id, key_secret)) == NULL)
+		    key_id, key_secret, &imgsz)) == NULL)
 			exit(1);
 	}
 
@@ -2125,7 +2138,7 @@ main(int argc, char * argv[])
 
 	/* Register an image. */
 	if ((ami = registerimage(region, snapshot, name, desc, arch, sriov,
-	    ena, key_id, key_secret)) == NULL) {
+	    ena, key_id, key_secret, imgsz)) == NULL) {
 		warnp("Failure registering AMI");
 		exit(1);
 	}
