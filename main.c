@@ -4,6 +4,7 @@
 
 #include <errno.h>
 #include <inttypes.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -2092,6 +2093,12 @@ main(int argc, char * argv[])
 	/* Load AWS keys. */
 	if (aws_readkeys(keyfile, &key_id, &key_secret)) {
 		warnp("Cannot read AWS keys");
+		exit(1);
+	}
+
+	/* Ignore SIGPIPE. */
+	if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+		warnp("signal(SIGPIPE)");
 		exit(1);
 	}
 
