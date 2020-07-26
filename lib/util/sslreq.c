@@ -176,8 +176,13 @@ sslreq2(const char * host, const char * port, const char * certfile,
 	SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
 
 	/* Load root certificates. */
-	if (!SSL_CTX_load_verify_locations(ctx, certfile, NULL))
-		return "Could not load root certificates";
+	if (certfile) {
+		if (!SSL_CTX_load_verify_locations(ctx, certfile, NULL))
+			return "Could not load root certificates";
+	} else {
+		if (!SSL_CTX_set_default_verify_paths(ctx))
+			return "Could not load root certificates";
+	}
 
 	/* Create an SSL connection within the specified context. */
 	if ((ssl = SSL_new(ctx)) == NULL)

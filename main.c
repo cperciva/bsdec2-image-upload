@@ -21,7 +21,7 @@
 #include "warnp.h"
 
 #ifndef CERTFILE
-#define CERTFILE "/usr/local/share/certs/ca-root-nss.crt"
+#define CERTFILE NULL
 #endif
 #define PARTSZ (10 * 1024 * 1024)
 
