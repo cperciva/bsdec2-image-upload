@@ -1259,8 +1259,11 @@ uploadsnap(const char * fname, const char * imgfmt, const char * region,
 	*imgsz = sb.st_size;
 
 	/* Map the file. */
-	if ((p = mmap(NULL, len, PROT_READ, MAP_PRIVATE | MAP_NOCORE,
-	    fileno(f), 0)) == MAP_FAILED) {
+	if ((p = mmap(NULL, len, PROT_READ, MAP_PRIVATE
+#ifdef MAP_NOCORE
+		| MAP_NOCORE
+#endif
+	    , fileno(f), 0)) == MAP_FAILED) {
 		warnp("Could not map disk image");
 		goto err1;
 	}
