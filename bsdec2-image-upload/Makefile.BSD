@@ -1,0 +1,48 @@
+PROG=	bsdec2-image-upload
+SRCS=	main.c
+MAN1	=
+WARNS	?=	3
+CFLAGS	+=	-Wno-error=\#warnings
+BINDIR	?=	/usr/local/bin
+
+# Library code required
+LDADD_REQ	=	-lcrypto -lssl
+
+# Useful relative directory
+LIBCPERCIVA_DIR =	../libcperciva
+
+# Fundamental algorithms
+.PATH.c	:	${LIBCPERCIVA_DIR}/alg
+SRCS	+=	sha256.c
+IDIRS	+=	-I ${LIBCPERCIVA_DIR}/alg
+
+# Data structures
+.PATH.c	:	${LIBCPERCIVA_DIR}/datastruct
+SRCS	+=	elasticarray.c
+IDIRS	+=	-I ${LIBCPERCIVA_DIR}/datastruct
+
+# Utility functions
+.PATH.c	:	${LIBCPERCIVA_DIR}/util
+SRCS	+=	asprintf.c
+SRCS	+=	entropy.c
+SRCS	+=	getopt.c
+SRCS	+=	hexify.c
+SRCS	+=	insecure_memzero.c
+SRCS	+=	warnp.c
+IDIRS	+=	-I ${LIBCPERCIVA_DIR}/util
+
+# AWS request signing
+.PATH	:	${LIBCPERCIVA_DIR}/aws
+SRCS	+=	aws_readkeys.c
+SRCS	+=	aws_sign.c
+IDIRS	+=	-I ${LIBCPERCIVA_DIR}/aws
+
+# SSL requests
+.PATH	:	../lib/util
+SRCS	+=	rfc3986.c
+SRCS	+=	sslreq.c
+IDIRS	+=	-I ../lib/util
+
+CFLAGS	+=	-g
+
+.include <bsd.prog.mk>
