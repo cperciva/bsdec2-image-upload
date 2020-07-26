@@ -118,7 +118,7 @@ s3_put(const char * key_id, const char * key_secret, const char * region,
 		goto err3;
 
 	/* Send the request. */
-	if ((errstr = sslreq2(host, "443", CERTFILE, headers, len,
+	if ((errstr = sslreq2(host, "443", CERTFILE, (uint8_t *)headers, len,
 	    buf, buflen, resp, &resplen)) != NULL) {
 		warnp("SSL request failed: %s", errstr);
 		goto err4;
@@ -128,11 +128,11 @@ s3_put(const char * key_id, const char * key_secret, const char * region,
 	resp[resplen] = '\0';
 
         /* Find the end of the first line. */
-        pos = strcspn(resp, "\r\n");
+        pos = strcspn((char *)resp, "\r\n");
 
         /* Look for a "200" status on the first line. */
-        if ((strstr(resp, " 200 ") == NULL) ||
-            (strstr(resp, " 200 ") > (char *)&resp[pos])) {
+        if ((strstr((char *)resp, " 200 ") == NULL) ||
+            (strstr((char *)resp, " 200 ") > (char *)&resp[pos])) {
 		warnp("S3 request failed:\n%s\n", resp);
 		goto err4;
 	}
@@ -387,7 +387,8 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 		free(s);
 		goto err2;
 	}
-	if (s3_put_loop(key_id, key_secret, region, bucket, path, s, len)) {
+	if (s3_put_loop(key_id, key_secret, region, bucket, path,
+	    (uint8_t *)s, len)) {
 		free(path);
 		free(s);
 		goto err2;
@@ -434,11 +435,11 @@ ec2_apicall(const char * key_id, const char * key_secret, const char * region,
 	uint8_t * resp;
 	size_t resplen;
 	size_t pos;
-	uint8_t * body;
+	char * body;
 
 	/* Sign request. */
-	if (aws_sign_ec2_headers(key_id, key_secret, region, s, strlen(s),
-	    &x_amz_content_sha256, &x_amz_date, &authorization)) {
+	if (aws_sign_ec2_headers(key_id, key_secret, region, (uint8_t *)s,
+	    strlen(s), &x_amz_content_sha256, &x_amz_date, &authorization)) {
 		warnp("Failed to sign EC2 POST request");
 		goto err0;
 	}
@@ -469,8 +470,8 @@ ec2_apicall(const char * key_id, const char * key_secret, const char * region,
 		goto err3;
 
 	/* Send the request. */
-	if ((errstr = sslreq(host, "443", CERTFILE, req, len, resp, &resplen))
-	    != NULL) {
+	if ((errstr = sslreq(host, "443", CERTFILE, (uint8_t *)req, len,
+	    resp, &resplen)) != NULL) {
 		warnp("SSL request failed: %s", errstr);
 		goto err4;
 	}
@@ -479,23 +480,23 @@ ec2_apicall(const char * key_id, const char * key_secret, const char * region,
 	resp[resplen] = '\0';
 
 	/* EC2 API responses should not contain NUL bytes. */
-	if (strlen(resp) != resplen) {
+	if (strlen((char *)resp) != resplen) {
 		warnp("NUL byte in EC2 API response");
 		goto err4;
 	}
 
         /* Find the end of the first line. */
-        pos = strcspn(resp, "\r\n");
+        pos = strcspn((char *)resp, "\r\n");
 
         /* Look for a "200" status on the first line. */
-        if ((strstr(resp, " 200 ") == NULL) ||
-            (strstr(resp, " 200 ") > (char *)&resp[pos])) {
+        if ((strstr((char *)resp, " 200 ") == NULL) ||
+            (strstr((char *)resp, " 200 ") > (char *)&resp[pos])) {
 		warnp("EC2 API request failed:\n%s\n", resp);
 		goto err4;
 	}
 
 	/* Find the end of the headers. */
-	if ((body = strstr(resp, "\r\n\r\n")) == NULL) {
+	if ((body = strstr((char *)resp, "\r\n\r\n")) == NULL) {
 		warnp("Bad EC2 API response received:\n%s\n", resp);
 		goto err4;
 	}
@@ -1676,7 +1677,8 @@ ssm_store(const char * key_id, const char * key_secret,
 
 	/* Sign request. */
 	if (aws_sign_ssm_headers(key_id, key_secret, region, "PutParameter",
-	    s, strlen(s), &x_amz_content_sha256, &x_amz_date, &authorization)) {
+	    (uint8_t *)s, strlen(s), &x_amz_content_sha256, &x_amz_date,
+	    &authorization)) {
 		warnp("Failed to sign SSM PutParameter request");
 		goto err1;
 	}
@@ -1709,8 +1711,8 @@ ssm_store(const char * key_id, const char * key_secret,
 		goto err4;
 
 	/* Send the request. */
-	if ((errstr = sslreq(host, "443", CERTFILE, req, len, resp, &resplen))
-	    != NULL) {
+	if ((errstr = sslreq(host, "443", CERTFILE, (uint8_t *)req, len,
+	    resp, &resplen)) != NULL) {
 		warnp("SSL request failed: %s", errstr);
 		goto err5;
 	}
@@ -1719,17 +1721,17 @@ ssm_store(const char * key_id, const char * key_secret,
 	resp[resplen] = '\0';
 
 	/* EC2 API responses should not contain NUL bytes. */
-	if (strlen(resp) != resplen) {
+	if (strlen((char *)resp) != resplen) {
 		warnp("NUL byte in SSM API response");
 		goto err5;
 	}
 
         /* Find the end of the first line. */
-        pos = strcspn(resp, "\r\n");
+        pos = strcspn((char *)resp, "\r\n");
 
         /* Look for a "200" status on the first line. */
-        if ((strstr(resp, " 200 ") == NULL) ||
-            (strstr(resp, " 200 ") > (char *)&resp[pos])) {
+        if ((strstr((char *)resp, " 200 ") == NULL) ||
+            (strstr((char *)resp, " 200 ") > (char *)&resp[pos])) {
 		warnp("SSM API request failed:\n%s\n", resp);
 		goto err5;
 	}
@@ -1790,7 +1792,7 @@ sns_publish(const char * key_id, const char * key_secret,
 	uint8_t * resp;
 	size_t resplen;
 	size_t pos;
-	uint8_t * body;
+	char * body;
 
 	/* Construct message subject. */
 	if (asprintf(&msg_subject, "New %s AMIs", releaseversion) == -1)
@@ -1866,8 +1868,8 @@ sns_publish(const char * key_id, const char * key_secret,
 	region[strcspn(region, ":")] = '\0';
 
 	/* Sign request. */
-	if (aws_sign_sns_headers(key_id, key_secret, region, s, strlen(s),
-	    &x_amz_content_sha256, &x_amz_date, &authorization)) {
+	if (aws_sign_sns_headers(key_id, key_secret, region, (uint8_t *)s,
+	    strlen(s), &x_amz_content_sha256, &x_amz_date, &authorization)) {
 		warnp("Failed to sign SNS POST request");
 		goto err5;
 	}
@@ -1899,8 +1901,8 @@ sns_publish(const char * key_id, const char * key_secret,
 		goto err8;
 
 	/* Send the request. */
-	if ((errstr = sslreq(host, "443", CERTFILE, req, len, resp, &resplen))
-	    != NULL) {
+	if ((errstr = sslreq(host, "443", CERTFILE, (uint8_t *)req, len,
+	    resp, &resplen)) != NULL) {
 		warnp("SSL request failed: %s", errstr);
 		goto err9;
 	}
@@ -1909,23 +1911,23 @@ sns_publish(const char * key_id, const char * key_secret,
 	resp[resplen] = '\0';
 
 	/* SNS API responses should not contain NUL bytes. */
-	if (strlen(resp) != resplen) {
+	if (strlen((char *)resp) != resplen) {
 		warnp("NUL byte in SNS API response");
 		goto err9;
 	}
 
         /* Find the end of the first line. */
-        pos = strcspn(resp, "\r\n");
+        pos = strcspn((char *)resp, "\r\n");
 
         /* Look for a "200" status on the first line. */
-        if ((strstr(resp, " 200 ") == NULL) ||
-            (strstr(resp, " 200 ") > (char *)&resp[pos])) {
+        if ((strstr((char *)resp, " 200 ") == NULL) ||
+            (strstr((char *)resp, " 200 ") > (char *)&resp[pos])) {
 		warnp("SNS API request failed:\n%s\n", resp);
 		goto err9;
 	}
 
 	/* Find the end of the headers. */
-	if ((body = strstr(resp, "\r\n\r\n")) == NULL) {
+	if ((body = strstr((char *)resp, "\r\n\r\n")) == NULL) {
 		warnp("Bad SNS API response received:\n%s\n", resp);
 		goto err9;
 	}
