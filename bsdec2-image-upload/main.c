@@ -96,20 +96,20 @@ s3_put(const char * key_id, const char * key_secret, const char * region,
 	/* Construct request header and compute length. */
 	if (asprintf(&headers,
 	    "PUT %s HTTP/1.1\r\n"
-	    "Host: %s.s3.amazonaws.com\r\n"
+	    "Host: %s.s3.%s.amazonaws.com\r\n"
 	    "X-Amz-Date: %s\r\n"
 	    "X-Amz-Content-SHA256: %s\r\n"
 	    "Authorization: %s\r\n"
 	    "Content-Length: %zu\r\n"
 	    "Connection: close\r\n"
 	    "\r\n",
-	    path, bucket, x_amz_date, x_amz_content_sha256,
+	    path, bucket, region, x_amz_date, x_amz_content_sha256,
 	    authorization, buflen) == -1)
 		goto err1;
 	len = strlen(headers);
 
 	/* Construct S3 endpoint name. */
-	if (asprintf(&host, "%s.s3.amazonaws.com", bucket) == -1)
+	if (asprintf(&host, "%s.s3.%s.amazonaws.com", bucket, region) == -1)
 		goto err2;
 
 	/* Allocate space for a 16 kB response plus a trailing NUL. */

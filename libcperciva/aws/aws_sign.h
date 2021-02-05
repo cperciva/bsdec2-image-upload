@@ -10,7 +10,7 @@
  * Return values ${x_amz_content_sha256}, ${x_amz_date}, and ${authorization}
  * such that
  *   ${method} ${path} HTTP/1.1
- *   Host: ${bucket}.s3.amazonaws.com
+ *   Host: ${bucket}.s3.${region}.amazonaws.com
  *   X-Amz-Date: ${x_amz_date}
  *   X-Amz-Content-SHA256: ${x_amz_content_sha256}
  *   Authorization: ${authorization}
@@ -27,7 +27,7 @@ int aws_sign_s3_headers(const char *, const char *, const char *,
  * aws_sign_s3_querystr(key_id, key_secret, region, method, bucket, path,
  *     expiry):
  * Return a query string ${query} such that
- *   ${method} http://${bucket}.s3.amazonaws.com${path}?${query}
+ *   ${method} http://${bucket}.${region}.s3.amazonaws.com${path}?${query}
  * is a correctly signed request which expires in ${expiry} seconds, assuming
  * that the ${bucket} S3 bucket is in region ${region}.
  */

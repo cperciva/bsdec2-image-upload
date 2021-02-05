@@ -79,7 +79,7 @@ err0:
  * Return values ${x_amz_content_sha256}, ${x_amz_date}, and ${authorization}
  * such that
  *   ${method} ${path} HTTP/1.1
- *   Host: ${bucket}.s3.amazonaws.com
+ *   Host: ${bucket}.s3.${region}.amazonaws.com
  *   X-Amz-Date: ${x_amz_date}
  *   X-Amz-Content-SHA256: ${x_amz_content_sha256}
  *   Authorization: ${authorization}
@@ -129,13 +129,13 @@ aws_sign_s3_headers(const char * key_id, const char * key_secret,
 	    "%s\n"
 	    "%s\n"
 	    "\n"
-	    "host:%s.s3.amazonaws.com\n"
+	    "host:%s.s3.%s.amazonaws.com\n"
 	    "x-amz-content-sha256:%s\n"
 	    "x-amz-date:%s\n"
 	    "\n"
 	    "host;x-amz-content-sha256;x-amz-date\n"
 	    "%s",
-	    method, path, bucket, content_sha256, datetime,
+	    method, path, bucket, region, content_sha256, datetime,
 	    content_sha256) == -1)
 		goto err0;
 
@@ -180,7 +180,7 @@ err0:
  * aws_sign_s3_querystr(key_id, key_secret, region, method, bucket, path,
  *     expiry):
  * Return a query string ${query} such that
- *   ${method} http://${bucket}.s3.amazonaws.com${path}?${query}
+ *   ${method} http://${bucket}.s3.${region}.amazonaws.com${path}?${query}
  * is a correctly signed request which expires in ${expiry} seconds, assuming
  * that the ${bucket} S3 bucket is in region ${region}.
  */
@@ -222,12 +222,12 @@ aws_sign_s3_querystr(const char * key_id, const char * key_secret,
 	    "X-Amz-Date=%s&"
 	    "X-Amz-Expires=%d&"
 	    "X-Amz-SignedHeaders=host\n"
-	    "host:%s.s3.amazonaws.com\n"
+	    "host:%s.s3.%s.amazonaws.com\n"
 	    "\n"
 	    "host\n"
 	    "UNSIGNED-PAYLOAD",
 	    method, path, key_id, date, region, "s3", datetime, expiry,
-	    bucket) == -1)
+	    bucket, region) == -1)
 		goto err0;
 
 	if (aws_sign(key_secret, date, datetime, region, "s3", s, hhex))
