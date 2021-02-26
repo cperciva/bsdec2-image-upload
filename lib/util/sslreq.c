@@ -4,6 +4,7 @@
 #include <netinet/in.h>
 
 #include <assert.h>
+#include <limits.h>
 #include <netdb.h>
 #include <stdint.h>
 #include <string.h>
