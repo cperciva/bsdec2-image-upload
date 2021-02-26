@@ -16,16 +16,20 @@
 #include "sslreq.h"
 
 /*
- * LibreSSL claims to be OpenSSL 2.0, but (currently) has APIs compatible with
+ * LibreSSL claims to be OpenSSL 2.0, but (mostly) has APIs compatible with
  * OpenSSL 1.0.1g.
  */
 #ifdef LIBRESSL_VERSION_NUMBER
 #undef OPENSSL_VERSION_NUMBER
 #define OPENSSL_VERSION_NUMBER 0x1000107fL
+#if LIBRESSL_VERSION_NUMBER >= 0x2090000fL
+#define HAVE_SSL_SET1_HOST
+#endif
 #endif
 
 /* Compatibility for OpenSSL pre-1.1.0 */
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
+#ifndef HAVE_SSL_SET1_HOST
 static int
 SSL_set1_host(SSL * ssl, const char * hostname)
 {
@@ -34,6 +38,7 @@ SSL_set1_host(SSL * ssl, const char * hostname)
 	param = SSL_get0_param(ssl);
 	return (X509_VERIFY_PARAM_set1_host(param, hostname, strlen(hostname)));
 }
+#endif
 
 static void
 SSL_set_hostflags(SSL * ssl, unsigned int flags)
