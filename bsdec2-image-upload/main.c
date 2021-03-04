@@ -244,15 +244,15 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 		"<file-format>RAW</file-format>"
 		"<importer>"
 		    "<name>bsdec2-image-upload</name>"
-		    "<version>1.4.0</version>"
-		    "<release>2021-02-25</release>"
+		    "<version>1.4.1</version>"
+		    "<release>2021-03-04</release>"
 		"</importer>"
-		"<self-destruct-url>https://%s.s3.amazonaws.com%s?%s</self-destruct-url>"
+		"<self-destruct-url>https://%s.s3.%s.amazonaws.com%s?%s</self-destruct-url>"
 		"<import>"
 		    "<size>%" PRId64 "</size>"
 		    "<volume-size>%d</volume-size>"
 		    "<parts count=\"%" PRId64 "\">",
-	    bucket, path, query, (uint64_t)sb.st_size,
+	    bucket, region, path, query, (uint64_t)sb.st_size,
 	    (int)((sb.st_size + (1 << 30) - 1) / (1 << 30)),
 	    (uint64_t)(sb.st_size + PARTSZ - 1) / PARTSZ) == -1)
 		goto err5;
@@ -316,8 +316,8 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 		if ((query = encodeamp(query)) == NULL)
 			goto err4;
 		if (asprintf(&s,
-		    "<head-url>https://%s.s3.amazonaws.com%s?%s</head-url>",
-		    bucket, path, query) == -1)
+		    "<head-url>https://%s.s3.%s.amazonaws.com%s?%s</head-url>",
+		    bucket, region, path, query) == -1)
 			goto err5;
 		if (str_append(manifest, s, strlen(s)))
 			goto err6;
@@ -333,8 +333,8 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 		if ((query = encodeamp(query)) == NULL)
 			goto err4;
 		if (asprintf(&s,
-		    "<get-url>https://%s.s3.amazonaws.com%s?%s</get-url>",
-		    bucket, path, query) == -1)
+		    "<get-url>https://%s.s3.%s.amazonaws.com%s?%s</get-url>",
+		    bucket, region, path, query) == -1)
 			goto err5;
 		if (str_append(manifest, s, strlen(s)))
 			goto err6;
@@ -350,8 +350,8 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 		if ((query = encodeamp(query)) == NULL)
 			goto err4;
 		if (asprintf(&s,
-		    "<delete-url>https://%s.s3.amazonaws.com%s?%s</delete-url>",
-		    bucket, path, query) == -1)
+		    "<delete-url>https://%s.s3.%s.amazonaws.com%s?%s</delete-url>",
+		    bucket, region, path, query) == -1)
 			goto err5;
 		if (str_append(manifest, s, strlen(s)))
 			goto err6;
@@ -738,8 +738,8 @@ importvolume(const char * region, const char * bucket, const char * manifest,
 	if ((query = aws_sign_s3_querystr(key_id, key_secret, region, "GET",
 	    bucket, manifest, 604800)) == NULL)
 		goto err0;
-	if (asprintf(&url, "https://%s.s3.amazonaws.com%s?%s",
-	    bucket, manifest, query) == -1)
+	if (asprintf(&url, "https://%s.s3.%s.amazonaws.com%s?%s",
+	    bucket, region, manifest, query) == -1)
 		goto err1;
 	if ((urlenc = rfc3986_encode(url)) == NULL)
 		goto err2;
