@@ -244,8 +244,8 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 		"<file-format>RAW</file-format>"
 		"<importer>"
 		    "<name>bsdec2-image-upload</name>"
-		    "<version>1.4.1</version>"
-		    "<release>2021-03-04</release>"
+		    "<version>1.4.2</version>"
+		    "<release>2021-06-11</release>"
 		"</importer>"
 		"<self-destruct-url>https://%s.s3.%s.amazonaws.com%s?%s</self-destruct-url>"
 		"<import>"
@@ -1340,7 +1340,8 @@ err0:
 static char *
 registerimage(const char * region, const char * snapshot, const char * name,
     const char * desc, const char * arch, int sriov, int ena,
-    const char * key_id, const char * key_secret, uint64_t imgsz)
+    const char * key_id, const char * key_secret, uint64_t imgsz,
+    const char * bootmode)
 {
 	char * nameenc;
 	char * descenc;
@@ -1390,10 +1391,11 @@ registerimage(const char * region, const char * snapshot, const char * name,
 	    "BlockDeviceMapping.4.VirtualName=ephemeral2&"
 	    "BlockDeviceMapping.5.DeviceName=%%2Fdev%%2Fsde&"
 	    "BlockDeviceMapping.5.VirtualName=ephemeral3&"
+	    "BootMode=%s&"
 	    "Version=2016-11-15",
 	    nameenc, descenc, archenc, sriov ? "SriovNetSupport=simple&" : "",
 	    ena ? "EnaSupport=true&" : "",
-	    snapshot, rootsz) == -1)
+	    snapshot, rootsz, bootmode) == -1)
 		goto err3;
 
 	/*
@@ -2021,6 +2023,7 @@ main(int argc, char * argv[])
 	const char * arch = "x86_64";
 	const char * ssm_name = NULL;
 	const char * imgfmt = NULL;
+	const char * bootmode = NULL;
 	char * key_id;
 	char * key_secret;
 	char ** regions;
@@ -2061,6 +2064,9 @@ main(int argc, char * argv[])
 		GETOPT_OPTARG("--ssm-name"):
 			ssm_name = optarg;
 			break;
+		GETOPT_OPT("--uefi"):
+			bootmode = "uefi";
+			break;
 		GETOPT_OPT("--vhd"):
 			imgfmt = "vhd";
 			rawdisk = 0;
@@ -2093,6 +2099,14 @@ main(int argc, char * argv[])
 	default:
 		/* Wrong number of arguments. */
 		usage();
+	}
+
+	/* Set default boot mode if not specified. */
+	if (bootmode == NULL) {
+		if (strcmp(arch, "arm64") == 0)
+			bootmode = "uefi";
+		else
+			bootmode = "legacy-bios";
 	}
 
 	/* Load AWS keys. */
@@ -2150,7 +2164,7 @@ main(int argc, char * argv[])
 
 	/* Register an image. */
 	if ((ami = registerimage(region, snapshot, name, desc, arch, sriov,
-	    ena, key_id, key_secret, imgsz)) == NULL) {
+	    ena, key_id, key_secret, imgsz, bootmode)) == NULL) {
 		warnp("Failure registering AMI");
 		exit(1);
 	}
