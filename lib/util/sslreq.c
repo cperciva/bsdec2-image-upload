@@ -127,6 +127,7 @@ sslreq2(const char * host, const char * port, const char * certfile,
 	SSL * ssl;
 	int readlen;
 	size_t resppos;
+	const char * errstr = NULL;
 
 	/* Create resolver hints structure. */
 	memset(&hints, 0, sizeof(hints));
@@ -135,8 +136,10 @@ sslreq2(const char * host, const char * port, const char * certfile,
 	hints.ai_protocol = IPPROTO_TCP;
 
 	/* Perform DNS lookup. */
-	if ((error = getaddrinfo(host, port, &hints, &res)) != 0)
-		return "DNS lookup failed";
+	if ((error = getaddrinfo(host, port, &hints, &res)) != 0) {
+		errstr = "DNS lookup failed";
+		goto out0;
+	}
 
 	/* Iterate through the addresses we obtained trying to connect. */
 	for (r = res; r != NULL; r = r->ai_next) {
@@ -156,20 +159,32 @@ sslreq2(const char * host, const char * port, const char * certfile,
 	freeaddrinfo(res);
 
 	/* Did we manage to connect? */
-	if (r == NULL)
-		return "Could not connect";
+	if (r == NULL) {
+		errstr = "Could not connect";
+		goto out0;
+	}
 
 	/* Launch SSL. */
-	if (!SSL_library_init())
-		return "Could not initialize SSL";
+	if (!SSL_library_init()) {
+		errstr = "Could not initialize SSL";
+		close(s);
+		goto out0;
+	}
 
 	/* Opt for compatibility. */
-	if ((meth = SSLv23_client_method()) == NULL)
-		return "Could not obtain SSL method";
+	if ((meth = SSLv23_client_method()) == NULL) {
+		errstr = "Could not obtain SSL method";
+		close(s);
+		goto out0;
+	}
 
 	/* Create an SSL context. */
-	if ((ctx = SSL_CTX_new((void *)(uintptr_t)(const void *)meth)) == NULL)
-		return "Could not create SSL context";
+	if ((ctx =
+	    SSL_CTX_new((void *)(uintptr_t)(const void *)meth)) == NULL) {
+		errstr = "Could not create SSL context";
+		close(s);
+		goto out0;
+	}
 
 	/* Disable SSLv2 and SSLv3. */
 	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3);
@@ -179,29 +194,45 @@ sslreq2(const char * host, const char * port, const char * certfile,
 
 	/* Load root certificates. */
 	if (certfile) {
-		if (!SSL_CTX_load_verify_locations(ctx, certfile, NULL))
-			return "Could not load root certificates";
+		if (!SSL_CTX_load_verify_locations(ctx, certfile, NULL)) {
+			errstr = "Could not load root certificates";
+			close(s);
+			goto out1;
+		}
 	} else {
-		if (!SSL_CTX_set_default_verify_paths(ctx))
-			return "Could not load root certificates";
+		if (!SSL_CTX_set_default_verify_paths(ctx)) {
+			errstr = "Could not load root certificates";
+			close(s);
+			goto out1;
+		}
 	}
 
 	/* Create an SSL connection within the specified context. */
-	if ((ssl = SSL_new(ctx)) == NULL)
-		return "Could not create SSL connection";
+	if ((ssl = SSL_new(ctx)) == NULL) {
+		errstr = "Could not create SSL connection";
+		close(s);
+		goto out1;
+	}
 
 	/* Attach the socket we opened earlier. */
-	if ((b = BIO_new_socket(s, 1)) == NULL)
-		return "Could not create BIO";
+	if ((b = BIO_new_socket(s, 1)) == NULL) {
+		errstr = "Could not create BIO";
+		close(s);
+		goto out2;
+	}
 	SSL_set_bio(ssl, b, b);
 
 	/* Enable SNI; some servers need this to send us the right cert. */
-	if (!SSL_set_tlsext_host_name(ssl, host))
-		return "Could not enable SNI";
+	if (!SSL_set_tlsext_host_name(ssl, host)) {
+		errstr = "Could not enable SNI";
+		goto out2;
+	}
 
 	/* Tell OpenSSL which host we're trying to talk to... */
-	if (!SSL_set1_host(ssl, host))
-		return "SSL_set1_host failed";
+	if (!SSL_set1_host(ssl, host)) {
+		errstr = "SSL_set1_host failed";
+		goto out2;
+	}
 
 	/* ... and ask it to make sure that this is what is happening. */
 	SSL_set_hostflags(ssl, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
@@ -211,16 +242,22 @@ sslreq2(const char * host, const char * port, const char * certfile,
 	SSL_set_connect_state(ssl);
 
 	/* Perform the SSL handshake. */
-	if (SSL_connect(ssl) != 1)
-		return "SSL handshake failed";
+	if (SSL_connect(ssl) != 1) {
+		errstr = "SSL handshake failed";
+		goto out2;
+	}
 
 	/* Write our HTTP request. */
-	if (SSL_write(ssl, req, reqlen) < reqlen)
-		return "Could not write request";
+	if (SSL_write(ssl, req, reqlen) < reqlen) {
+		errstr = "Could not write request";
+		goto out3;
+	}
 
 	/* Write the payload. */
-	if (payload && !SSL_write_ex(ssl, payload, plen, &plen))
-		return "Could not write payload";
+	if (payload && !SSL_write_ex(ssl, payload, plen, &plen)) {
+		errstr = "Could not write payload";
+		goto out3;
+	}
 
 	/* Read the response. */
 	for (resppos = 0; ; resppos += readlen) {
@@ -231,13 +268,18 @@ sslreq2(const char * host, const char * port, const char * certfile,
 	*resplen = resppos;
 
 	/* Did the read fail? */
-	if (readlen == -1)
-		return "Could not read response";
+	if (readlen == -1) {
+		errstr = "Could not read response";
+		goto out3;
+	}
 
 	/* Shut down SSL. */
+out3:
 	SSL_shutdown(ssl);
+out2:
 	SSL_free(ssl);
+out1:
 	SSL_CTX_free(ctx);
-
-	return (NULL);
+out0:
+	return (errstr);
 }
