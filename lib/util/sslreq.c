@@ -123,6 +123,7 @@ sslreq2(const char * host, const char * port, const char * certfile,
 	int s;
 	const SSL_METHOD * meth;
 	SSL_CTX * ctx;
+	BIO * b;
 	SSL * ssl;
 	int readlen;
 	size_t resppos;
@@ -188,8 +189,11 @@ sslreq2(const char * host, const char * port, const char * certfile,
 	/* Create an SSL connection within the specified context. */
 	if ((ssl = SSL_new(ctx)) == NULL)
 		return "Could not create SSL connection";
-	if (!SSL_set_fd(ssl, s))
-		return "Could not attach SSL to socket";
+
+	/* Attach the socket we opened earlier. */
+	if ((b = BIO_new_socket(s, 1)) == NULL)
+		return "Could not create BIO";
+	SSL_set_bio(ssl, b, b);
 
 	/* Enable SNI; some servers need this to send us the right cert. */
 	if (!SSL_set_tlsext_host_name(ssl, host))
