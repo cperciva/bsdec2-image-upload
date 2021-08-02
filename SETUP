@@ -76,6 +76,7 @@ otherwise:
 	ec2:CreateSnapshot
 	ec2:DescribeSnapshots
 	ec2:DeleteVolume
+	ec2:RegisterImage
 
 If --public or --allregions is used:
 	ec2:DescribeRegions
