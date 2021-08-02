@@ -72,7 +72,7 @@ If --vhd is used:
 otherwise:
 	s3:DeleteObject
 	ec2:ImportVolume
-	ec2:DescribeConverstionTasks
+	ec2:DescribeConversionTasks
 	ec2:CreateSnapshot
 	ec2:DescribeSnapshots
 	ec2:DeleteVolume
