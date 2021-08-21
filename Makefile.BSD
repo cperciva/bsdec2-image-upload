@@ -1,7 +1,7 @@
 PKG=	bsdec2-image-upload
 PROGS=	bsdec2-image-upload
 TESTS=
-SUBST_VERSION_FILES=
+SUBST_VERSION_FILES=	bsdec2-image-upload/main.c
 PUBLISH= ${PROGS} COPYRIGHT SETUP Makefile libcperciva lib
 
 ### Shared code between Tarsnap projects.

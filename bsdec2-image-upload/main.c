@@ -244,8 +244,8 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 		"<file-format>RAW</file-format>"
 		"<importer>"
 		    "<name>bsdec2-image-upload</name>"
-		    "<version>1.4.3</version>"
-		    "<release>2021-06-26</release>"
+		    "<version>@VERSION@</version>"
+		    "<release>@ISODATE@</release>"
 		"</importer>"
 		"<self-destruct-url>https://%s.s3.%s.amazonaws.com%s?%s</self-destruct-url>"
 		"<import>"
@@ -2071,6 +2071,9 @@ main(int argc, char * argv[])
 			imgfmt = "vhd";
 			rawdisk = 0;
 			break;
+		GETOPT_OPT("-v"):
+			fprintf(stderr, "bsdec2-image-upload @VERSION@\n");
+			exit(0);
 		GETOPT_MISSING_ARG:
 			fprintf(stderr, "missing argument\n");
 			/* FALLTHROUGH */
