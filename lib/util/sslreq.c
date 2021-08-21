@@ -25,6 +25,9 @@
 #if LIBRESSL_VERSION_NUMBER >= 0x2090000fL
 #define HAVE_SSL_SET1_HOST
 #endif
+#if LIBRESSL_VERSION_NUMBER >= 0x3030200fL
+#define HAVE_SSL_SET_HOSTFLAGS
+#endif
 #endif
 
 /* Compatibility for OpenSSL pre-1.1.0 */
@@ -40,6 +43,7 @@ SSL_set1_host(SSL * ssl, const char * hostname)
 }
 #endif
 
+#ifndef HAVE_SSL_SET_HOSTFLAGS
 static void
 SSL_set_hostflags(SSL * ssl, unsigned int flags)
 {
@@ -48,6 +52,7 @@ SSL_set_hostflags(SSL * ssl, unsigned int flags)
 	param = SSL_get0_param(ssl);
 	X509_VERIFY_PARAM_set_hostflags(param, flags);
 }
+#endif
 #endif
 
 /* Compatibility for OpenSSL pre-1.1.1. */
