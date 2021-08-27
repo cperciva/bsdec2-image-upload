@@ -1673,6 +1673,7 @@ ssm_store(const char * key_id, const char * key_secret,
 	    "\"Name\":\"%s\","
 	    "\"Value\":\"%s\","
 	    "\"Type\":\"String\","
+	    "\"DataType\":\"aws:ec2:image\","
 	    "\"Overwrite\":true"
 	    "}", ssm_name, ami) == -1)
 		goto err0;
