@@ -15,18 +15,19 @@
 
 #include "sslreq.h"
 
-/*
- * LibreSSL claims to be OpenSSL 2.0, but (mostly) has APIs compatible with
- * OpenSSL 1.0.1g.
- */
+/* Handle LibreSSL */
 #ifdef LIBRESSL_VERSION_NUMBER
-#undef OPENSSL_VERSION_NUMBER
-#define OPENSSL_VERSION_NUMBER 0x1000107fL
+
 #if LIBRESSL_VERSION_NUMBER >= 0x2090000fL
 #define HAVE_SSL_SET1_HOST
 #endif
+
 #if LIBRESSL_VERSION_NUMBER >= 0x3030200fL
 #define HAVE_SSL_SET_HOSTFLAGS
+#endif
+
+#if LIBRESSL_VERSION_NUMBER >= 0x3050000fL
+#define HAVE_SSL_WRITE_EX
 #endif
 
 #else /* end LibreSSL section */
