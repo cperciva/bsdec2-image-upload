@@ -1,0 +1,7 @@
+# Build system configuration
+cflags-filter.sh
+cpusupport-config.h
+posix-flags.sh
+# Compiled files
+bsdec2-image-upload/*.o
+bsdec2-image-upload/bsdec2-image-upload
