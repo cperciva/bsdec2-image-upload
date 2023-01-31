@@ -15,23 +15,38 @@
 
 #include "sslreq.h"
 
-/*
- * LibreSSL claims to be OpenSSL 2.0, but (mostly) has APIs compatible with
- * OpenSSL 1.0.1g.
- */
+/* Handle LibreSSL */
 #ifdef LIBRESSL_VERSION_NUMBER
-#undef OPENSSL_VERSION_NUMBER
-#define OPENSSL_VERSION_NUMBER 0x1000107fL
+
 #if LIBRESSL_VERSION_NUMBER >= 0x2090000fL
 #define HAVE_SSL_SET1_HOST
 #endif
+
 #if LIBRESSL_VERSION_NUMBER >= 0x3030200fL
 #define HAVE_SSL_SET_HOSTFLAGS
 #endif
+
+#if LIBRESSL_VERSION_NUMBER >= 0x3050000fL
+#define HAVE_SSL_WRITE_EX
 #endif
 
-/* Compatibility for OpenSSL pre-1.1.0 */
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#else /* end LibreSSL section */
+
+/* Handle OpenSSL */
+#ifdef OPENSSL_VERSION_NUMBER
+
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+#define HAVE_SSL_SET1_HOST
+#define HAVE_SSL_SET_HOSTFLAGS
+#endif
+
+#if OPENSSL_VERSION_NUMBER >= 0x10101000L
+#define HAVE_SSL_WRITE_EX
+#endif
+
+#endif /* end OpenSSL section */
+#endif
+
 #ifndef HAVE_SSL_SET1_HOST
 static int
 SSL_set1_host(SSL * ssl, const char * hostname)
@@ -53,10 +68,8 @@ SSL_set_hostflags(SSL * ssl, unsigned int flags)
 	X509_VERIFY_PARAM_set_hostflags(param, flags);
 }
 #endif
-#endif
 
-/* Compatibility for OpenSSL pre-1.1.1. */
-#if OPENSSL_VERSION_NUMBER < 0x10101000L
+#ifndef HAVE_SSL_WRITE_EX
 static int
 SSL_write_ex(SSL * ssl, const void * buf, size_t num,
     size_t * written)
