@@ -2068,6 +2068,9 @@ main(int argc, char * argv[])
 		GETOPT_OPT("--uefi"):
 			bootmode = "uefi";
 			break;
+		GETOPT_OPT("--uefi-preferred"):
+			bootmode= "uefi-preferred";
+			break;
 		GETOPT_OPT("--vhd"):
 			imgfmt = "vhd";
 			rawdisk = 0;
