@@ -1381,16 +1381,8 @@ registerimage(const char * region, const char * snapshot, const char * name,
 	    "%s"
 	    "BlockDeviceMapping.1.DeviceName=%%2Fdev%%2Fsda1&"
 	    "BlockDeviceMapping.1.Ebs.SnapshotId=%s&"
-	    "BlockDeviceMapping.1.Ebs.VolumeType=gp2&"
+	    "BlockDeviceMapping.1.Ebs.VolumeType=gp3&"
 	    "BlockDeviceMapping.1.Ebs.VolumeSize=%d&"
-	    "BlockDeviceMapping.2.DeviceName=%%2Fdev%%2Fsdb&"
-	    "BlockDeviceMapping.2.VirtualName=ephemeral0&"
-	    "BlockDeviceMapping.3.DeviceName=%%2Fdev%%2Fsdc&"
-	    "BlockDeviceMapping.3.VirtualName=ephemeral1&"
-	    "BlockDeviceMapping.4.DeviceName=%%2Fdev%%2Fsdd&"
-	    "BlockDeviceMapping.4.VirtualName=ephemeral2&"
-	    "BlockDeviceMapping.5.DeviceName=%%2Fdev%%2Fsde&"
-	    "BlockDeviceMapping.5.VirtualName=ephemeral3&"
 	    "BootMode=%s&"
 	    "Version=2016-11-15",
 	    nameenc, descenc, archenc, sriov ? "SriovNetSupport=simple&" : "",
