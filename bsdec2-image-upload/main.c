@@ -127,12 +127,12 @@ s3_put(const char * key_id, const char * key_secret, const char * region,
 	/* NUL-terminate the response. */
 	resp[resplen] = '\0';
 
-        /* Find the end of the first line. */
-        pos = strcspn((char *)resp, "\r\n");
+	/* Find the end of the first line. */
+	pos = strcspn((char *)resp, "\r\n");
 
-        /* Look for a "200" status on the first line. */
-        if ((strstr((char *)resp, " 200 ") == NULL) ||
-            (strstr((char *)resp, " 200 ") > (char *)&resp[pos])) {
+	/* Look for a "200" status on the first line. */
+	if ((strstr((char *)resp, " 200 ") == NULL) ||
+	    (strstr((char *)resp, " 200 ") > (char *)&resp[pos])) {
 		warnp("S3 request failed:\n%s\n", resp);
 		goto err4;
 	}
@@ -485,12 +485,12 @@ ec2_apicall(const char * key_id, const char * key_secret, const char * region,
 		goto err4;
 	}
 
-        /* Find the end of the first line. */
-        pos = strcspn((char *)resp, "\r\n");
+	/* Find the end of the first line. */
+	pos = strcspn((char *)resp, "\r\n");
 
-        /* Look for a "200" status on the first line. */
-        if ((strstr((char *)resp, " 200 ") == NULL) ||
-            (strstr((char *)resp, " 200 ") > (char *)&resp[pos])) {
+	/* Look for a "200" status on the first line. */
+	if ((strstr((char *)resp, " 200 ") == NULL) ||
+	    (strstr((char *)resp, " 200 ") > (char *)&resp[pos])) {
 		warnp("EC2 API request failed:\n%s\n", resp);
 		goto err4;
 	}
@@ -552,6 +552,138 @@ ec2_apicall_loop(const char * key_id, const char * key_secret,
 	}
 
 	/* Give up. */
+	return (NULL);
+}
+
+static char *
+ec2_apicall_resourcelimited(const char * key_id, const char * key_secret,
+    const char * region, const char * s)
+{
+	char * x_amz_content_sha256;
+	char * x_amz_date;
+	char * authorization;
+	char * req;
+	char * host;
+	size_t len;
+	const char * errstr;
+	uint8_t * resp;
+	size_t resplen;
+	size_t pos;
+	char * body;
+
+tryagain:
+	/* Sign request. */
+	if (aws_sign_ec2_headers(key_id, key_secret, region, (uint8_t *)s,
+	    strlen(s), &x_amz_content_sha256, &x_amz_date, &authorization)) {
+		warnp("Failed to sign EC2 POST request");
+		goto err0;
+	}
+
+	/* Construct request and compute length. */
+	if (asprintf(&req,
+	    "POST / HTTP/1.0\r\n"
+	    "Host: ec2.%s.amazonaws.com\r\n"
+	    "X-Amz-Date: %s\r\n"
+	    "X-Amz-Content-SHA256: %s\r\n"
+	    "Authorization: %s\r\n"
+	    "Content-Length: %zu\r\n"
+	    "Connection: close\r\n"
+	    "\r\n"
+	    "%s",
+	    region, x_amz_date, x_amz_content_sha256, authorization,
+	    strlen(s), s) == -1)
+		goto err1;
+	len = strlen(req);
+
+	/* Construct EC2 endpoint name. */
+	if (asprintf(&host, "ec2.%s.amazonaws.com", region) == -1)
+		goto err2;
+
+	/* Allocate space for a 16 kB response plus a trailing NUL. */
+	resplen = 16384;
+	if ((resp = malloc(resplen + 1)) == NULL)
+		goto err3;
+
+	/* Send the request. */
+	if ((errstr = sslreq(host, "443", CERTFILE, (uint8_t *)req, len,
+	    resp, &resplen)) != NULL) {
+		warnp("SSL request failed: %s", errstr);
+		goto err4;
+	}
+
+	/* NUL-terminate the response. */
+	resp[resplen] = '\0';
+
+	/* EC2 API responses should not contain NUL bytes. */
+	if (strlen((char *)resp) != resplen) {
+		warnp("NUL byte in EC2 API response");
+		goto err4;
+	}
+
+	/* Find the end of the first line. */
+	pos = strcspn((char *)resp, "\r\n");
+
+	/* Look for a "200" status on the first line. */
+	if ((strstr((char *)resp, " 200 ") == NULL) ||
+	    (strstr((char *)resp, " 200 ") > (char *)&resp[pos])) {
+		/* If no "200", look for "ResourceLimitExceeded". */
+		if (strstr((char *)resp, "ResourceLimitExceeded") == NULL) {
+			warnp("EC2 API request failed:\n%s\n", resp);
+			goto err4;
+		}
+
+		/* Wait a minute. */
+		warnp("Request Limit Exceeded; waiting a minute");
+		sleep(60);
+
+		/* Clean up and try again. */
+		free(resp);
+		free(host);
+		free(req);
+		free(authorization);
+		free(x_amz_date);
+		free(x_amz_content_sha256);
+		goto tryagain;
+	}
+
+	/* Find the end of the headers. */
+	if ((body = strstr((char *)resp, "\r\n\r\n")) == NULL) {
+		warnp("Bad EC2 API response received:\n%s\n", resp);
+		goto err4;
+	}
+
+	/* Skip to the start of the response body. */
+	body = &body[4];
+
+	/* Duplicate response body. */
+	if ((body = strdup(body)) == NULL)
+		goto err4;
+
+	/* Free repsonse buffer. */
+	free(resp);
+
+	/* Free request buffers. */
+	free(host);
+	free(req);
+	free(authorization);
+	free(x_amz_date);
+	free(x_amz_content_sha256);
+
+	/* Success! */
+	return (body);
+
+err4:
+	free(resp);
+err3:
+	free(host);
+err2:
+	free(req);
+err1:
+	free(authorization);
+	free(x_amz_date);
+	free(x_amz_content_sha256);
+err0:
+	/* Failure! */
 	return (NULL);
 }
 
@@ -757,7 +889,8 @@ importvolume(const char * region, const char * bucket, const char * manifest,
 		goto err3;
 
 	/* Issue API request. */
-	if ((resp = ec2_apicall(key_id, key_secret, region, s)) == NULL)
+	if ((resp = ec2_apicall_resourcelimited(key_id, key_secret,
+		    region, s)) == NULL)
 		goto err4;
 
 	/* Extract the conversion task ID. */
@@ -1721,12 +1854,12 @@ ssm_store(const char * key_id, const char * key_secret,
 		goto err5;
 	}
 
-        /* Find the end of the first line. */
-        pos = strcspn((char *)resp, "\r\n");
+	/* Find the end of the first line. */
+	pos = strcspn((char *)resp, "\r\n");
 
-        /* Look for a "200" status on the first line. */
-        if ((strstr((char *)resp, " 200 ") == NULL) ||
-            (strstr((char *)resp, " 200 ") > (char *)&resp[pos])) {
+	/* Look for a "200" status on the first line. */
+	if ((strstr((char *)resp, " 200 ") == NULL) ||
+	    (strstr((char *)resp, " 200 ") > (char *)&resp[pos])) {
 		warnp("SSM API request failed:\n%s\n", resp);
 		goto err5;
 	}
@@ -1911,12 +2044,12 @@ sns_publish(const char * key_id, const char * key_secret,
 		goto err9;
 	}
 
-        /* Find the end of the first line. */
-        pos = strcspn((char *)resp, "\r\n");
+	/* Find the end of the first line. */
+	pos = strcspn((char *)resp, "\r\n");
 
-        /* Look for a "200" status on the first line. */
-        if ((strstr((char *)resp, " 200 ") == NULL) ||
-            (strstr((char *)resp, " 200 ") > (char *)&resp[pos])) {
+	/* Look for a "200" status on the first line. */
+	if ((strstr((char *)resp, " 200 ") == NULL) ||
+	    (strstr((char *)resp, " 200 ") > (char *)&resp[pos])) {
 		warnp("SNS API request failed:\n%s\n", resp);
 		goto err9;
 	}
