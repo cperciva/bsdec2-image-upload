@@ -263,8 +263,8 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 	free(path);
 
 	/* Say what we're doing. */
-	fprintf(stderr, "Uploading %s to\nhttp://%s.s3.amazonaws.com/%s/\n"
-	    "in %" PRId64 " part(s)", fname, bucket, noncehex,
+	fprintf(stderr, "Uploading %s to\nhttps://%s.s3.%s.amazonaws.com/%s/\n"
+	    "in %" PRId64 " part(s)", fname, bucket, region, noncehex,
 	    (uint64_t)(sb.st_size + PARTSZ - 1) / PARTSZ);
 
 	/* Upload parts one by one. */
@@ -1409,8 +1409,8 @@ uploadsnap(const char * fname, const char * imgfmt, const char * region,
 	}
 
 	/* Say what we're doing. */
-	fprintf(stderr, "Uploading %s to\nhttp://%s.s3.amazonaws.com%s\n",
-	    fname, bucket, s);
+	fprintf(stderr, "Uploading %s to\nhttps://%s.s3.%s.amazonaws.com%s\n",
+	    fname, bucket, region, s);
 
 	/* Upload the disk image. */
 	if (s3_put_loop(key_id, key_secret, region, bucket, s, p, len)) {
