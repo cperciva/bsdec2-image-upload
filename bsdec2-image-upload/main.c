@@ -2155,6 +2155,7 @@ main(int argc, char * argv[])
 	const char * imageversion;
 	const char * arch = "x86_64";
 	const char * ssm_name = NULL;
+	const char * ssm_name_extra = NULL;
 	const char * imgfmt = NULL;
 	const char * bootmode = NULL;
 	char * key_id;
@@ -2196,6 +2197,9 @@ main(int argc, char * argv[])
 			break;
 		GETOPT_OPTARG("--ssm-name"):
 			ssm_name = optarg;
+			break;
+		GETOPT_OPTARG("--ssm-name-extra"):
+			ssm_name_extra = optarg;
 			break;
 		GETOPT_OPT("--uefi"):
 			bootmode = "uefi";
@@ -2371,9 +2375,25 @@ main(int argc, char * argv[])
 
 	/* Record AMI IDs in SSM Parameter Store. */
 	if (ssm_name) {
-		fprintf(stderr, "Storing AMI Ids in SSM Parameter Store...");
+		fprintf(stderr, "Storing AMI Ids in SSM Parameter Store (path %s)...",
+		    ssm_name);
 		for (i = 0; i < nregions; i++) {
 			if (ssm_store(key_id, key_secret, ssm_name,
+			    regions[i], amis[i])) {
+				warnp("Error storing AMI Id for region %s",
+				    regions[i]);
+				exit(1);
+			}
+		}
+		fprintf(stderr, " done.\n");
+	}
+
+	/* Record AMI IDs in SSM Parameter Store. */
+	if (ssm_name_extra) {
+		fprintf(stderr, "Storing AMI Ids in SSM Parameter Store (path %s)...",
+		    ssm_name_extra);
+		for (i = 0; i < nregions; i++) {
+			if (ssm_store(key_id, key_secret, ssm_name_extra,
 			    regions[i], amis[i])) {
 				warnp("Error storing AMI Id for region %s",
 				    regions[i]);
