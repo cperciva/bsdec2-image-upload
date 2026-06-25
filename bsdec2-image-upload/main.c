@@ -998,7 +998,8 @@ waitforimport(const char * region, const char * taskid,
 		printstatus("Importing volume", status, &laststatus);
 
 		/* Check for AWS errors. */
-		if (strstr(status, "SERVER_ERROR") != NULL) {
+		if ((strstr(status, "SERVER_ERROR") != NULL) ||
+		    (strstr(status, "CLIENT_ERROR") != NULL)) {
 			goto err4;
 		}
 
