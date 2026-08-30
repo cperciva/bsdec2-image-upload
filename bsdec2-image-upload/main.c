@@ -1670,7 +1670,7 @@ copyimage(const char * region, const char * ami, const char * toregion,
 		goto err0;
 
 	/* Issue API request. */
-	if ((resp = ec2_apicall(key_id, key_secret, toregion, s)) == NULL)
+	if ((resp = ec2_apicall_loop(key_id, key_secret, toregion, s)) == NULL)
 		goto err1;
 
 	/* Find <imageId> tag. */
@@ -1800,6 +1800,7 @@ ssm_store(const char * key_id, const char * key_secret,
 	uint8_t * resp;
 	size_t resplen;
 	size_t pos;
+	int i;
 
 	/* Construct SSM PutParameter request body. */
 	if (asprintf(&s, "{"
@@ -1846,12 +1847,16 @@ ssm_store(const char * key_id, const char * key_secret,
 	if ((resp = malloc(resplen + 1)) == NULL)
 		goto err4;
 
-	/* Send the request. */
-	if ((errstr = sslreq(host, "443", CERTFILE, (uint8_t *)req, len,
-	    resp, &resplen)) != NULL) {
-		warnp("SSL request failed: %s", errstr);
-		goto err5;
+	/* Try up to 10 times. */
+	for (i = 0; i < 10; i++) {
+		if ((errstr = sslreq(host, "443", CERTFILE, (uint8_t *)req,
+		    len, resp, &resplen)) == NULL)
+			break;
+		fprintf(stderr, "SSL request failed %d times: %s\n",
+		    i + 1, errstr);
 	}
+	if (errstr != NULL)
+		goto err5;
 
 	/* NUL-terminate the response. */
 	resp[resplen] = '\0';
