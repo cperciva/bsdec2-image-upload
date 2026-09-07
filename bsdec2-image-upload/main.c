@@ -24,7 +24,7 @@
 #ifndef CERTFILE
 #define CERTFILE NULL
 #endif
-#define PARTSZ (10 * 1024 * 1024)
+#define PARTSZ (50 * 1024 * 1024)
 
 /* Elastic string type. */
 ELASTICARRAY_DECL(STR, str, char);
