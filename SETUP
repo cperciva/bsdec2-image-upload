@@ -80,3 +80,6 @@ otherwise:
 If --public or --allregions is used:
 	ec2:DescribeRegions
 	ec2:CopyImage
+
+If --ssm-name or --ssm-name-extra is used:
+	ssm:PutParameter
