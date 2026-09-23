@@ -902,7 +902,7 @@ importvolume(const char * region, const char * bucket, const char * manifest,
 
 	/* Extract the conversion task ID. */
 	if ((taskid = xmlextract(resp, "conversionTaskId")) == NULL) {
-		warn0("Could not find conversionTaskID in ImportVolume response:\n%s",
+		warn0("Could not find conversionTaskId in ImportVolume response:\n%s",
 		    resp);
 		goto err5;
 	}
@@ -1341,7 +1341,7 @@ waitforimportsnapshot(const char * region, const char * taskid,
 	/* We're done! */
 	fprintf(stderr, " done.\n");
 
-	/* Find <SnapshotId> tag. */
+	/* Find <snapshotId> tag. */
 	if ((snapshot = xmlextract(resp, "snapshotId")) == NULL) {
 		warn0("Could not find <snapshotId> in DescribeImportSnapshotTasks response: %s", resp);
 		goto err3;
