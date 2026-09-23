@@ -307,6 +307,7 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 			free(s);
 			goto err4;
 		}
+		free(s);
 
 		/* Generate <head-url> block. */
 		if ((query = aws_sign_s3_querystr(key_id, key_secret, region,
@@ -378,7 +379,7 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 
 	/* Export manifest string. */
 	if (str_export(manifest, &s, &len))
-		goto err2;
+		goto err3;
 
 	/* Say what we're doing. */
 	fprintf(stderr, "Uploading volume manifest...");
@@ -398,6 +399,10 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 
 	/* Report completion. */
 	fprintf(stderr, " done.\n");
+
+	/* Free buffer and close file. */
+	free(buf);
+	fclose(f);
 
 	/* Return disk image size. */
 	*size = sb.st_size;
