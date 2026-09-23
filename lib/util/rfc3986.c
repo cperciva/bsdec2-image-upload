@@ -52,7 +52,7 @@ rfc3986_encode(const char * s)
 			t[j++] = '%';
 			hexify(&b, &t[j], 1);
 
-			/* Convert [a-f] to [A-Z]. */
+			/* Convert [a-f] to [A-F]. */
 			if (('a' <= t[j]) && (t[j] <= 'f'))
 				t[j] += 'A' - 'a';
 			if (('a' <= t[j + 1]) && (t[j + 1] <= 'f'))
