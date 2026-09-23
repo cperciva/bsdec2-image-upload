@@ -1265,6 +1265,11 @@ uploadraw(const char * diskimg, const char * region, const char * bucket,
 		goto err4;
 	}
 
+	/* Free volume ID, task ID, and manifest strings. */
+	free(volume);
+	free(taskid);
+	free(manifest);
+
 	/* Return the snapshot ID. */
 	return (snapshot);
 
