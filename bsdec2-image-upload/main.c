@@ -2148,7 +2148,7 @@ usage(void)
 	fprintf(stderr, "usage: bsdec2-image-upload [--public]"
 	    " [--publicamis] [--allregions] [--publicsnap]"
 	    " [--ssm-name <path>] [--ssm-name-extra <path>]"
-	    " [--sriov] [--ena] [--arm64]"
+	    " [--sriov] [--ena] [--arm64] [--uefi | --uefi-preferred]"
 	    " [--vhd]"
 	    " %s %s %s %s %s %s [%s %s %s]\n",
 	    "<disk image>", "<name>", "<description>",
