@@ -515,7 +515,7 @@ ec2_apicall(const char * key_id, const char * key_secret, const char * region,
 	if ((body = strdup(body)) == NULL)
 		goto err4;
 
-	/* Free repsonse buffer. */
+	/* Free response buffer. */
 	free(resp);
 
 	/* Free request buffers. */
@@ -666,7 +666,7 @@ tryagain:
 	if ((body = strdup(body)) == NULL)
 		goto err4;
 
-	/* Free repsonse buffer. */
+	/* Free response buffer. */
 	free(resp);
 
 	/* Free request buffers. */
@@ -1205,7 +1205,7 @@ deletevolume(const char * region, const char * volume,
 	/* Free request. */
 	free(s);
 
-	/* Return AMI. */
+	/* Success! */
 	return (0);
 
 err2:
@@ -1451,7 +1451,7 @@ uploadsnap(const char * fname, const char * imgfmt, const char * region,
 	if ((resp = ec2_apicall(key_id, key_secret, region, ec2req)) == NULL)
 		goto err4;
 
-	/* Extract the conversion task ID. */
+	/* Extract the import task ID. */
 	if ((taskid = xmlextract(resp, "importTaskId")) == NULL) {
 		warn0("Could not find importTaskId in ImportSnapshot response:\n%s",
 		    resp);
@@ -1742,7 +1742,7 @@ makepublic(const char * region, const char * ami,
 	/* Free request. */
 	free(s);
 
-	/* Return AMI. */
+	/* Success! */
 	return (0);
 
 err2:
@@ -1786,7 +1786,7 @@ makesnappublic(const char * region, const char * snapshot,
 	/* Free request. */
 	free(s);
 
-	/* Return AMI. */
+	/* Success! */
 	return (0);
 
 err2:
@@ -1851,7 +1851,7 @@ ssm_store(const char * key_id, const char * key_secret,
 		goto err2;
 	len = strlen(req);
 
-	/* Construct EC2 endpoint name. */
+	/* Construct SSM endpoint name. */
 	if (asprintf(&host, "ssm.%s.amazonaws.com", region) == -1)
 		goto err3;
 
@@ -1877,7 +1877,7 @@ ssm_store(const char * key_id, const char * key_secret,
 	/* NUL-terminate the response. */
 	resp[resplen] = '\0';
 
-	/* EC2 API responses should not contain NUL bytes. */
+	/* SSM API responses should not contain NUL bytes. */
 	if (strlen((char *)resp) != resplen) {
 		warn0("NUL byte in SSM API response");
 		goto err5;
