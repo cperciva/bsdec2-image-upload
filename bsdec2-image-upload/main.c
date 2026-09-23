@@ -121,7 +121,7 @@ s3_put(const char * key_id, const char * key_secret, const char * region,
 	/* Send the request. */
 	if ((errstr = sslreq2(host, "443", CERTFILE, (uint8_t *)headers, len,
 	    buf, buflen, resp, &resplen)) != NULL) {
-		warnp("SSL request failed: %s", errstr);
+		warn0("SSL request failed: %s", errstr);
 		goto err4;
 	}
 
@@ -134,7 +134,7 @@ s3_put(const char * key_id, const char * key_secret, const char * region,
 	/* Look for a "200" status on the first line. */
 	if ((strstr((char *)resp, " 200 ") == NULL) ||
 	    (strstr((char *)resp, " 200 ") > (char *)&resp[pos])) {
-		warnp("S3 request failed:\n%s\n", resp);
+		warn0("S3 request failed:\n%s", resp);
 		goto err4;
 	}
 
@@ -479,7 +479,7 @@ ec2_apicall(const char * key_id, const char * key_secret, const char * region,
 	/* Send the request. */
 	if ((errstr = sslreq(host, "443", CERTFILE, (uint8_t *)req, len,
 	    resp, &resplen)) != NULL) {
-		warnp("SSL request failed: %s", errstr);
+		warn0("SSL request failed: %s", errstr);
 		goto err4;
 	}
 
@@ -488,7 +488,7 @@ ec2_apicall(const char * key_id, const char * key_secret, const char * region,
 
 	/* EC2 API responses should not contain NUL bytes. */
 	if (strlen((char *)resp) != resplen) {
-		warnp("NUL byte in EC2 API response");
+		warn0("NUL byte in EC2 API response");
 		goto err4;
 	}
 
@@ -498,13 +498,13 @@ ec2_apicall(const char * key_id, const char * key_secret, const char * region,
 	/* Look for a "200" status on the first line. */
 	if ((strstr((char *)resp, " 200 ") == NULL) ||
 	    (strstr((char *)resp, " 200 ") > (char *)&resp[pos])) {
-		warnp("EC2 API request failed:\n%s\n", resp);
+		warn0("EC2 API request failed:\n%s", resp);
 		goto err4;
 	}
 
 	/* Find the end of the headers. */
 	if ((body = strstr((char *)resp, "\r\n\r\n")) == NULL) {
-		warnp("Bad EC2 API response received:\n%s\n", resp);
+		warn0("Bad EC2 API response received:\n%s", resp);
 		goto err4;
 	}
 
@@ -614,7 +614,7 @@ tryagain:
 	/* Send the request. */
 	if ((errstr = sslreq(host, "443", CERTFILE, (uint8_t *)req, len,
 	    resp, &resplen)) != NULL) {
-		warnp("SSL request failed: %s", errstr);
+		warn0("SSL request failed: %s", errstr);
 		goto err4;
 	}
 
@@ -623,7 +623,7 @@ tryagain:
 
 	/* EC2 API responses should not contain NUL bytes. */
 	if (strlen((char *)resp) != resplen) {
-		warnp("NUL byte in EC2 API response");
+		warn0("NUL byte in EC2 API response");
 		goto err4;
 	}
 
@@ -635,12 +635,12 @@ tryagain:
 	    (strstr((char *)resp, " 200 ") > (char *)&resp[pos])) {
 		/* If no "200", look for "ResourceLimitExceeded". */
 		if (strstr((char *)resp, "ResourceLimitExceeded") == NULL) {
-			warnp("EC2 API request failed:\n%s\n", resp);
+			warn0("EC2 API request failed:\n%s", resp);
 			goto err4;
 		}
 
 		/* Wait a minute. */
-		warnp("Request Limit Exceeded; waiting a minute");
+		warn0("Request Limit Exceeded; waiting a minute");
 		sleep(60);
 
 		/* Clean up and try again. */
@@ -655,7 +655,7 @@ tryagain:
 
 	/* Find the end of the headers. */
 	if ((body = strstr((char *)resp, "\r\n\r\n")) == NULL) {
-		warnp("Bad EC2 API response received:\n%s\n", resp);
+		warn0("Bad EC2 API response received:\n%s", resp);
 		goto err4;
 	}
 
@@ -826,7 +826,7 @@ getregionlist(const char * key_id, const char * key_secret,
 
 	/* Extract the <regionInfo>. */
 	if ((regionInfo = xmlextract(resp, "regionInfo")) == NULL) {
-		warnp("Could not find regionInfo in DescribeRegions response:\n%s\n",
+		warn0("Could not find regionInfo in DescribeRegions response:\n%s",
 		    resp);
 		goto err1;
 	}
@@ -837,7 +837,7 @@ getregionlist(const char * key_id, const char * key_secret,
 
 	/* Sanity-check: There should be at least 1 region. */
 	if (*nregions == 0) {
-		warn0("Could not find any regions in DescribeRegions response:\n%s\n",
+		warn0("Could not find any regions in DescribeRegions response:\n%s",
 		    resp);
 		goto err3;
 	}
@@ -902,7 +902,7 @@ importvolume(const char * region, const char * bucket, const char * manifest,
 
 	/* Extract the conversion task ID. */
 	if ((taskid = xmlextract(resp, "conversionTaskId")) == NULL) {
-		warnp("Could not find conversionTaskID in ImportVolume response:\n%s\n",
+		warn0("Could not find conversionTaskID in ImportVolume response:\n%s",
 		    resp);
 		goto err5;
 	}
@@ -982,7 +982,7 @@ waitforimport(const char * region, const char * taskid,
 
 		/* Find <volume> tag. */
 		if ((volume = xmlextract(resp, "volume")) == NULL) {
-			warnp("Could not find <volume> in DescribeConversionTasks response: %s", resp);
+			warn0("Could not find <volume> in DescribeConversionTasks response: %s", resp);
 			goto err2;
 		}
 
@@ -997,7 +997,7 @@ waitforimport(const char * region, const char * taskid,
 
 		/* Look for a <statusMessage> tag. */
 		if ((status = xmlextract(resp, "statusMessage")) == NULL) {
-			warnp("Could not find <statusMessage> in DescribeConversionTasks response: %s", resp);
+			warn0("Could not find <statusMessage> in DescribeConversionTasks response: %s", resp);
 			goto err3;
 		}
 
@@ -1075,7 +1075,7 @@ createsnapshot(const char * region, const char * volume,
 
 	/* Find <snapshotId> tag. */
 	if ((snapshot = xmlextract(resp, "snapshotId")) == NULL) {
-		warnp("Could not find <snapshotId> in CreateSnapshot response: %s", resp);
+		warn0("Could not find <snapshotId> in CreateSnapshot response: %s", resp);
 		goto err2;
 	}
 
@@ -1122,7 +1122,7 @@ waitforsnapshot(const char * region, const char * snapshot,
 
 		/* Find <status> tag. */
 		if ((status = xmlextract(resp, "status")) == NULL) {
-			warnp("Could not find <status> in DescribeSnapshots response: %s", resp);
+			warn0("Could not find <status> in DescribeSnapshots response: %s", resp);
 			goto err2;
 		}
 
@@ -1135,7 +1135,7 @@ waitforsnapshot(const char * region, const char * snapshot,
 			fprintf(stderr, ".");
 		} else {
 			/* Something bad happened. */
-			warnp("Bad status from DescribeSnapshots: %s", status);
+			warn0("Bad status from DescribeSnapshots: %s", status);
 			goto err3;
 		}
 
@@ -1195,7 +1195,7 @@ deletevolume(const char * region, const char * volume,
 
 	/* Make sure that we succeeded. */
 	if (strstr(resp, "<return>true</return>") == NULL) {
-		warnp("DeleteVolume failed: %s", resp);
+		warn0("DeleteVolume failed: %s", resp);
 		goto err2;
 	}
 
@@ -1314,7 +1314,7 @@ waitforimportsnapshot(const char * region, const char * taskid,
 
 		/* Find <status> tag and stop looping if completed. */
 		if ((status = xmlextract(resp, "status")) == NULL) {
-			warnp("Could not find <status> in DescribeImportSnapshotTasks response: %s", resp);
+			warn0("Could not find <status> in DescribeImportSnapshotTasks response: %s", resp);
 			goto err2;
 		}
 		if (strcmp(status, "completed") == 0)
@@ -1323,7 +1323,7 @@ waitforimportsnapshot(const char * region, const char * taskid,
 
 		/* Look for a <statusMessage> tag. */
 		if ((status = xmlextract(resp, "statusMessage")) == NULL) {
-			warnp("Could not find <statusMessage> in DescribeImportSnapshotTasks response: %s", resp);
+			warn0("Could not find <statusMessage> in DescribeImportSnapshotTasks response: %s", resp);
 			goto err2;
 		}
 
@@ -1343,7 +1343,7 @@ waitforimportsnapshot(const char * region, const char * taskid,
 
 	/* Find <SnapshotId> tag. */
 	if ((snapshot = xmlextract(resp, "snapshotId")) == NULL) {
-		warnp("Could not find <snapshotId> in DescribeImportSnapshotTasks response: %s", resp);
+		warn0("Could not find <snapshotId> in DescribeImportSnapshotTasks response: %s", resp);
 		goto err3;
 	}
 
@@ -1453,7 +1453,7 @@ uploadsnap(const char * fname, const char * imgfmt, const char * region,
 
 	/* Extract the conversion task ID. */
 	if ((taskid = xmlextract(resp, "importTaskId")) == NULL) {
-		warnp("Could not find importTaskId in ImportSnapshot response:\n%s\n",
+		warn0("Could not find importTaskId in ImportSnapshot response:\n%s",
 		    resp);
 		goto err5;
 	}
@@ -1557,7 +1557,7 @@ registerimage(const char * region, const char * snapshot, const char * name,
 
 	/* Find <imageId> tag. */
 	if ((ami = xmlextract(resp, "imageId")) == NULL) {
-		warnp("Could not find <imageId> in RegisterImage response: %s", resp);
+		warn0("Could not find <imageId> in RegisterImage response: %s", resp);
 		goto err5;
 	}
 
@@ -1613,7 +1613,7 @@ waitforami(const char * region, const char * ami,
 
 		/* Find <imageState> tag. */
 		if ((status = xmlextract(resp, "imageState")) == NULL) {
-			warnp("Could not find <imageState> in DescribeImages response: %s", resp);
+			warn0("Could not find <imageState> in DescribeImages response: %s", resp);
 			goto err2;
 		}
 
@@ -1626,7 +1626,7 @@ waitforami(const char * region, const char * ami,
 			fprintf(stderr, ".");
 		} else {
 			/* Something bad happened. */
-			warnp("Bad status from DescribeImages: %s", status);
+			warn0("Bad status from DescribeImages: %s", status);
 			goto err3;
 		}
 
@@ -1688,7 +1688,7 @@ copyimage(const char * region, const char * ami, const char * toregion,
 
 	/* Find <imageId> tag. */
 	if ((toami = xmlextract(resp, "imageId")) == NULL) {
-		warnp("Could not find <imageId> in CopyImage response: %s", resp);
+		warn0("Could not find <imageId> in CopyImage response: %s", resp);
 		goto err2;
 	}
 
@@ -1732,7 +1732,7 @@ makepublic(const char * region, const char * ami,
 
 	/* Make sure that we succeeded. */
 	if (strstr(resp, "<return>true</return>") == NULL) {
-		warnp("ModifyImageAttribute failed: %s", resp);
+		warn0("ModifyImageAttribute failed: %s", resp);
 		goto err2;
 	}
 
@@ -1776,7 +1776,7 @@ makesnappublic(const char * region, const char * snapshot,
 
 	/* Make sure that we succeeded. */
 	if (strstr(resp, "<return>true</return>") == NULL) {
-		warnp("ModifySnapshotAttribute failed: %s", resp);
+		warn0("ModifySnapshotAttribute failed: %s", resp);
 		goto err2;
 	}
 
@@ -1879,7 +1879,7 @@ ssm_store(const char * key_id, const char * key_secret,
 
 	/* EC2 API responses should not contain NUL bytes. */
 	if (strlen((char *)resp) != resplen) {
-		warnp("NUL byte in SSM API response");
+		warn0("NUL byte in SSM API response");
 		goto err5;
 	}
 
@@ -1889,7 +1889,7 @@ ssm_store(const char * key_id, const char * key_secret,
 	/* Look for a "200" status on the first line. */
 	if ((strstr((char *)resp, " 200 ") == NULL) ||
 	    (strstr((char *)resp, " 200 ") > (char *)&resp[pos])) {
-		warnp("SSM API request failed:\n%s\n", resp);
+		warn0("SSM API request failed:\n%s", resp);
 		goto err5;
 	}
 
@@ -2060,7 +2060,7 @@ sns_publish(const char * key_id, const char * key_secret,
 	/* Send the request. */
 	if ((errstr = sslreq(host, "443", CERTFILE, (uint8_t *)req, len,
 	    resp, &resplen)) != NULL) {
-		warnp("SSL request failed: %s", errstr);
+		warn0("SSL request failed: %s", errstr);
 		goto err9;
 	}
 
@@ -2069,7 +2069,7 @@ sns_publish(const char * key_id, const char * key_secret,
 
 	/* SNS API responses should not contain NUL bytes. */
 	if (strlen((char *)resp) != resplen) {
-		warnp("NUL byte in SNS API response");
+		warn0("NUL byte in SNS API response");
 		goto err9;
 	}
 
@@ -2079,13 +2079,13 @@ sns_publish(const char * key_id, const char * key_secret,
 	/* Look for a "200" status on the first line. */
 	if ((strstr((char *)resp, " 200 ") == NULL) ||
 	    (strstr((char *)resp, " 200 ") > (char *)&resp[pos])) {
-		warnp("SNS API request failed:\n%s\n", resp);
+		warn0("SNS API request failed:\n%s", resp);
 		goto err9;
 	}
 
 	/* Find the end of the headers. */
 	if ((body = strstr((char *)resp, "\r\n\r\n")) == NULL) {
-		warnp("Bad SNS API response received:\n%s\n", resp);
+		warn0("Bad SNS API response received:\n%s", resp);
 		goto err9;
 	}
 
@@ -2094,7 +2094,7 @@ sns_publish(const char * key_id, const char * key_secret,
 
 	/* Make sure there's a MessageId. */
 	if (strstr(body, "<MessageId>") == NULL) {
-		warnp("SNS API call failed?\n%s\n", body);
+		warn0("SNS API call failed?\n%s", body);
 		goto err9;
 	}
 
