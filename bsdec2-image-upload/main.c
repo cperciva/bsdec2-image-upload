@@ -997,10 +997,11 @@ waitforimport(const char * region, const char * taskid,
 		/* Print status as appropriate. */
 		printstatus("Importing volume", status, &laststatus);
 
-		/* Check for AWS errors. */
-		if ((strstr(status, "SERVER_ERROR") != NULL) ||
-		    (strstr(status, "CLIENT_ERROR") != NULL)) {
-			goto err4;
+		/* Check for AWS errors.  The status is now in laststatus. */
+		if ((strstr(laststatus, "SERVER_ERROR") != NULL) ||
+		    (strstr(laststatus, "CLIENT_ERROR") != NULL)) {
+			fprintf(stderr, "\n");
+			goto err3;
 		}
 
 		/* Free contents of <volume> tag and API response. */
@@ -1030,8 +1031,6 @@ waitforimport(const char * region, const char * taskid,
 	/* Return volume ID. */
 	return (volid);
 
-err4:
-	free(status);
 err3:
 	free(volume);
 err2:
