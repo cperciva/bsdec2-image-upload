@@ -25,6 +25,7 @@
 #define CERTFILE NULL
 #endif
 #define PARTSZ (50 * 1024 * 1024)
+#define RESPLEN 16384
 
 /* Elastic string type. */
 ELASTICARRAY_DECL(STR, str, char);
@@ -113,7 +114,7 @@ s3_put(const char * key_id, const char * key_secret, const char * region,
 		goto err2;
 
 	/* Allocate space for a 16 kB response plus a trailing NUL. */
-	resplen = 16384;
+	resplen = RESPLEN;
 	if ((resp = malloc(resplen + 1)) == NULL)
 		goto err3;
 
@@ -465,7 +466,7 @@ ec2_apicall(const char * key_id, const char * key_secret, const char * region,
 		goto err2;
 
 	/* Allocate space for a 16 kB response plus a trailing NUL. */
-	resplen = 16384;
+	resplen = RESPLEN;
 	if ((resp = malloc(resplen + 1)) == NULL)
 		goto err3;
 
@@ -600,7 +601,7 @@ tryagain:
 		goto err2;
 
 	/* Allocate space for a 16 kB response plus a trailing NUL. */
-	resplen = 16384;
+	resplen = RESPLEN;
 	if ((resp = malloc(resplen + 1)) == NULL)
 		goto err3;
 
@@ -1842,7 +1843,7 @@ ssm_store(const char * key_id, const char * key_secret,
 		goto err3;
 
 	/* Allocate space for a 16 kB response plus a trailing NUL. */
-	resplen = 16384;
+	resplen = RESPLEN;
 	if ((resp = malloc(resplen + 1)) == NULL)
 		goto err4;
 
@@ -1853,6 +1854,9 @@ ssm_store(const char * key_id, const char * key_secret,
 			break;
 		fprintf(stderr, "SSL request failed %d times: %s\n",
 		    i + 1, errstr);
+
+		/* Reset resplen to the full buffer. */
+		resplen = RESPLEN;
 	}
 	if (errstr != NULL)
 		goto err5;
@@ -2036,7 +2040,7 @@ sns_publish(const char * key_id, const char * key_secret,
 		goto err7;
 
 	/* Allocate space for a 16 kB response plus a trailing NUL. */
-	resplen = 16384;
+	resplen = RESPLEN;
 	if ((resp = malloc(resplen + 1)) == NULL)
 		goto err8;
 
