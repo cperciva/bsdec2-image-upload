@@ -250,9 +250,9 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 		"</importer>"
 		"<self-destruct-url>https://%s.s3.%s.amazonaws.com%s?%s</self-destruct-url>"
 		"<import>"
-		    "<size>%" PRId64 "</size>"
+		    "<size>%" PRIu64 "</size>"
 		    "<volume-size>%d</volume-size>"
-		    "<parts count=\"%" PRId64 "\">",
+		    "<parts count=\"%" PRIu64 "\">",
 	    bucket, region, path, query, (uint64_t)sb.st_size,
 	    (int)((sb.st_size + (1 << 30) - 1) / (1 << 30)),
 	    (uint64_t)(sb.st_size + PARTSZ - 1) / PARTSZ) == -1)
@@ -265,7 +265,7 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 
 	/* Say what we're doing. */
 	fprintf(stderr, "Uploading %s to\nhttps://%s.s3.%s.amazonaws.com/%s/\n"
-	    "in %" PRId64 " part(s)", fname, bucket, region, noncehex,
+	    "in %" PRIu64 " part(s)", fname, bucket, region, noncehex,
 	    (uint64_t)(sb.st_size + PARTSZ - 1) / PARTSZ);
 
 	/* Upload parts one by one. */
@@ -297,10 +297,11 @@ uploadvolume(const char * fname, const char * region, const char * bucket,
 
 		/* Construct the start of the <part> block. */
 		if (asprintf(&s,
-		    "<part index=\"%" PRId64 "\">"
-			"<byte-range start=\"%" PRId64 "\" end=\"%" PRId64 "\"/>"
+		    "<part index=\"%" PRIu64 "\">"
+			"<byte-range start=\"%" PRIu64 "\" end=\"%" PRIu64 "\"/>"
 			"<key>%s/part%" PRIu64 "</key>",
-		    (uint64_t)(pos / PARTSZ), pos, pos + buflen - 1, noncehex,
+		    (uint64_t)(pos / PARTSZ), (uint64_t)pos,
+		    (uint64_t)(pos + buflen - 1), noncehex,
 		    (uint64_t)(pos / PARTSZ)) == -1)
 			goto err4;
 		if (str_append(manifest, s, strlen(s))) {
@@ -887,9 +888,9 @@ importvolume(const char * region, const char * bucket, const char * manifest,
 	    "Action=ImportVolume&"
 	    "AvailabilityZone=%sa&"
 	    "Image.Format=RAW&"
-	    "Image.Bytes=%" PRId64 "&"
+	    "Image.Bytes=%" PRIu64 "&"
 	    "Image.ImportManifestUrl=%s&"
-	    "Volume.Size=%" PRId64 "&"
+	    "Volume.Size=%" PRIu64 "&"
 	    "Version=2014-09-01",
 	    region, size, urlenc, (size + (1 << 30) - 1) / (1 << 30)) == -1)
 		goto err3;
