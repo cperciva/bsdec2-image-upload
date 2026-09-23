@@ -1314,7 +1314,7 @@ waitforimportsnapshot(const char * region, const char * taskid,
 
 		/* Find <status> tag and stop looping if completed. */
 		if ((status = xmlextract(resp, "status")) == NULL) {
-			warnp("Could not find <status> in DescribeSnapshots response: %s", resp);
+			warnp("Could not find <status> in DescribeImportSnapshotTasks response: %s", resp);
 			goto err2;
 		}
 		if (strcmp(status, "completed") == 0)
