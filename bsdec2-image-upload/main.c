@@ -1343,7 +1343,7 @@ waitforimportsnapshot(const char * region, const char * taskid,
 	/* Find <SnapshotId> tag. */
 	if ((snapshot = xmlextract(resp, "snapshotId")) == NULL) {
 		warnp("Could not find <snapshotId> in DescribeImportSnapshotTasks response: %s", resp);
-		goto err2;
+		goto err3;
 	}
 
 	/* Free API request and response. */
@@ -1357,6 +1357,8 @@ waitforimportsnapshot(const char * region, const char * taskid,
 	/* Return snapshot ID. */
 	return (snapshot);
 
+err3:
+	free(status);
 err2:
 	free(resp);
 err1:
