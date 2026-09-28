@@ -19,6 +19,7 @@
 #include "hexify.h"
 #include "rfc3986.h"
 #include "sslreq.h"
+#include "sysendian.h"
 #include "warnp.h"
 
 #ifndef CERTFILE
@@ -1370,6 +1371,46 @@ err0:
 	return (NULL);
 }
 
+/*
+ * Determine the size of the virtual disk contained in the ${imgfmt} format
+ * disk image ${p} of length ${len} bytes, and store it in ${sizep}.
+ */
+static int
+imagesize(const uint8_t * p, size_t len, const char * imgfmt,
+    uint64_t * sizep)
+{
+	const uint8_t * footer;
+
+	if (strcmp(imgfmt, "vhd") == 0) {
+		/*
+		 * Fixed and dynamic VHD images both end with a 512-byte
+		 * footer, which starts with the cookie "conectix" and has
+		 * the virtual disk size in bytes as a big-endian 64-bit
+		 * value at offset 48.
+		 */
+		if (len < 512) {
+			warn0("Image too small to be a VHD");
+			goto err0;
+		}
+		footer = &p[len - 512];
+		if (memcmp(footer, "conectix", 8)) {
+			warn0("Image lacks VHD magic");
+			goto err0;
+		}
+		*sizep = be64dec(&footer[48]);
+	} else {
+		warn0("Unsupported disk image format: %s", imgfmt);
+		goto err0;
+	}
+
+	/* Success! */
+	return (0);
+
+err0:
+	/* Failure! */
+	return (-1);
+}
+
 static char *
 uploadsnap(const char * fname, const char * imgfmt, const char * region,
     const char * bucket, const char * key_id, const char * key_secret,
@@ -1411,7 +1452,6 @@ uploadsnap(const char * fname, const char * imgfmt, const char * region,
 		goto err1;
 	}
 	len = sb.st_size;
-	*imgsz = sb.st_size;
 
 	/* Map the file. */
 	if ((p = mmap(NULL, len, PROT_READ, MAP_PRIVATE
@@ -1422,6 +1462,13 @@ uploadsnap(const char * fname, const char * imgfmt, const char * region,
 		warnp("Could not map disk image");
 		goto err1;
 	}
+
+	/*
+	 * Find the size of the virtual disk; this is not the same as the size
+	 * of the file, due to metadata headers, sparsity, and/or compression.
+	 */
+	if (imagesize(p, len, imgfmt, imgsz))
+		goto err2;
 
 	/* Construct an S3 object name. */
 	if ((asprintf(&s, "/%s/snap.%s", noncehex, imgfmt)) == -1) {
