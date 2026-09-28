@@ -24,7 +24,7 @@ If you want to send SNS notifications, you need to create a topic.
 VM Import role
 --------------
 
-If you want to use the --vhd option:
+If you want to use the --vhd or --vmdk option:
 
 1. Create a 'vmimport' role which can be assumed by the AWS VM Import/Export
 Service:
@@ -66,7 +66,7 @@ If --public or --publicamis is used:
 If --publicsnap is used:
 	ec2:ModifySnapshotAttribute
 
-If --vhd is used:
+If --vhd or --vmdk is used:
 	ec2:ImportSnapshot
 	ec2:DescribeImportSnapshotTasks
 otherwise:

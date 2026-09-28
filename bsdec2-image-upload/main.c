@@ -1380,6 +1380,7 @@ imagesize(const uint8_t * p, size_t len, const char * imgfmt,
     uint64_t * sizep)
 {
 	const uint8_t * footer;
+	uint64_t nsecs;
 
 	if (strcmp(imgfmt, "vhd") == 0) {
 		/*
@@ -1398,6 +1399,27 @@ imagesize(const uint8_t * p, size_t len, const char * imgfmt,
 			goto err0;
 		}
 		*sizep = be64dec(&footer[48]);
+	} else if (strcmp(imgfmt, "vmdk") == 0) {
+		/*
+		 * VMDK sparse extents (including stream-optimized VMDKs)
+		 * start with a header which has the magic number "KDMV" and
+		 * the virtual disk size in 512-byte sectors as a
+		 * little-endian 64-bit value at offset 12.
+		 */
+		if (len < 20) {
+			warn0("Image too small to be a VMDK");
+			goto err0;
+		}
+		if (memcmp(p, "KDMV", 4)) {
+			warn0("Image lacks VMDK magic");
+			goto err0;
+		}
+		nsecs = le64dec(&p[12]);
+		if (nsecs > UINT64_MAX / 512) {
+			warn0("VMDK image reports invalid size");
+			goto err0;
+		}
+		*sizep = nsecs * 512;
 	} else {
 		warn0("Unsupported disk image format: %s", imgfmt);
 		goto err0;
@@ -2196,7 +2218,7 @@ usage(void)
 	    " [--publicamis] [--allregions] [--publicsnap]"
 	    " [--ssm-name <path>] [--ssm-name-extra <path>]"
 	    " [--sriov] [--ena] [--arm64] [--uefi | --uefi-preferred]"
-	    " [--vhd]"
+	    " [--vhd | --vmdk]"
 	    " %s %s %s %s %s %s [%s %s %s]\n",
 	    "<disk image>", "<name>", "<description>",
 	    "<region>", "<bucket>", "<AWS keyfile>",
@@ -2279,6 +2301,10 @@ main(int argc, char * argv[])
 			break;
 		GETOPT_OPT("--vhd"):
 			imgfmt = "vhd";
+			rawdisk = 0;
+			break;
+		GETOPT_OPT("--vmdk"):
+			imgfmt = "vmdk";
 			rawdisk = 0;
 			break;
 		GETOPT_OPT("-v"):
