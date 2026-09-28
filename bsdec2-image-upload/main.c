@@ -1296,6 +1296,7 @@ waitforimportsnapshot(const char * region, const char * taskid,
 	char * resp;
 	char * snapshot;
 	char * status;
+	char * msg;
 	char * laststatus = NULL;
 
 	/* Loop until we're finished. */
@@ -1320,12 +1321,15 @@ waitforimportsnapshot(const char * region, const char * taskid,
 		}
 		if (strcmp(status, "completed") == 0)
 			break;
-		free(status);
 
-		/* Look for a <statusMessage> tag. */
-		if ((status = xmlextract(resp, "statusMessage")) == NULL) {
-			warn0("Could not find <statusMessage> in DescribeImportSnapshotTasks response: %s", resp);
-			goto err2;
+		/*
+		 * Use the <statusMessage> tag if there is one.  This field is
+		 * optional, so there might not be one; if we can't extract one
+		 * then just print the "status" instead.
+		 */
+		if ((msg = xmlextract(resp, "statusMessage")) != NULL) {
+			free(status);
+			status = msg;
 		}
 
 		/* Print status as appropriate. */
