@@ -37,7 +37,7 @@ clean:
 ${PROG}:${SRCS:.c=.o}
 	${CC} -o ${PROG} ${SRCS:.c=.o} ${LDFLAGS} ${LDADD_EXTRA} ${LDADD_REQ} ${LDADD_POSIX}
 
-main.o: main.c ../libcperciva/util/asprintf.h ../libcperciva/aws/aws_readkeys.h ../libcperciva/aws/aws_sign.h ../libcperciva/datastruct/elasticarray.h ../libcperciva/util/entropy.h ../libcperciva/util/getopt.h ../libcperciva/util/hexify.h ../lib/util/rfc3986.h ../lib/util/sslreq.h ../libcperciva/util/warnp.h
+main.o: main.c ../libcperciva/util/asprintf.h ../libcperciva/aws/aws_readkeys.h ../libcperciva/aws/aws_sign.h ../libcperciva/datastruct/elasticarray.h ../libcperciva/util/entropy.h ../libcperciva/util/getopt.h ../libcperciva/util/hexify.h ../lib/util/rfc3986.h ../lib/util/sslreq.h ../libcperciva/util/sysendian.h ../libcperciva/util/warnp.h
 	${CC} ${CFLAGS_POSIX} -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -DCPUSUPPORT_CONFIG_FILE=\"cpusupport-config.h\"  -I.. ${IDIRS} ${CPPFLAGS} ${CFLAGS} -c main.c -o main.o
 sha256.o: ../libcperciva/alg/sha256.c ../libcperciva/util/insecure_memzero.h ../libcperciva/util/sysendian.h ../libcperciva/alg/sha256.h
 	${CC} ${CFLAGS_POSIX} -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -DCPUSUPPORT_CONFIG_FILE=\"cpusupport-config.h\"  -I.. ${IDIRS} ${CPPFLAGS} ${CFLAGS} -c ../libcperciva/alg/sha256.c -o sha256.o
